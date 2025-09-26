@@ -1,1 +1,43 @@
 node_modules
+.env
+logs
+npm-debug.log
+yarn-error.log
+
+# Ignore compiled JavaScript files
+dist
+build
+*.js
+*.js.map
+# Ignore TypeScript declaration files
+*.d.ts
+# Ignore IDE specific files
+.vscode
+.idea
+*.sublime-project
+*.sublime-workspace
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
+# Ignore coverage directory
+coverage
+.nyc_output
+# Ignore test output
+test-output
+# Ignore temporary files
+*.tmp
+*.temp
+# Ignore lock files
+package-lock.json
+yarn.lock
+.pnp.*
+.pnp.js
+# Ignore logs
+logs
+*.log
+# Ignore dotenv environment variable files
+.env.local
+.env.*.local
+# Ignore build output
+dist
+build
