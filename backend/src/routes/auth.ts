@@ -1,8 +1,13 @@
 import express, { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
-import { validateRegistration, validateLogin } from '../middleware/validation';
-import authMiddleware from '../middleware/auth';
+import { 
+  validateRegistration, 
+  validateLogin,
+  validateUpdateProfile,
+  validateChangePassword 
+} from '../middleware/validation';
+import authMiddleware, { blacklistToken, getTokenFromRequest } from '../middleware/auth';
 import { IUser, AuthenticatedUser } from '../types';
 
 const router = express.Router();
@@ -18,68 +23,73 @@ interface LoginRequest {
   password: string;
 }
 
+interface UpdateProfileRequest {
+  username?: string;
+  email?: string;
+}
+
+interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
 }
 
-const createUserResponse = (user: any) => {
-  const {
-    _id: id,
-    username,
-    email,
-    chips,
-    level,
-    gamesPlayed,
-    gamesWon,
-    totalWinnings,
-    experience,
-    createdAt,
-    updatedAt
-  } = user;
-
-  const winRate = gamesPlayed > 0 ? parseFloat(((gamesWon / gamesPlayed) * 100).toFixed(1)) : 0;
-
-  return {
-    id,
-    username,
-    email,
-    chips,
-    level,
-    gamesPlayed,
-    gamesWon,
-    totalWinnings,
-    experience,
-    winRate,
-    createdAt,
-    updatedAt
-  };
+// Helper function to generate JWT token
+const generateToken = (user: IUser): string => {
+  return jwt.sign(
+    { 
+      userId: user._id.toString(), 
+      email: user.email, 
+      username: user.username,
+      iat: Math.floor(Date.now() / 1000),
+      version: 1
+    },
+    process.env.JWT_SECRET || 'your-secret-key',
+    { expiresIn: '7d' }
+  );
 };
 
 // Helper function to set auth cookie
-const setAuthCookie = (res: Response, token: string) => {
+const setAuthCookie = (res: Response, token: string): void => {
   const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict' as const,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000,
     path: '/'
   };
   
   res.cookie('authToken', token, cookieOptions);
 };
 
-// Register
+// Helper function to clear auth cookie
+const clearAuthCookie = (res: Response): void => {
+  res.clearCookie('authToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/'
+  });
+};
+
+// Register User
 router.post('/register', validateRegistration, async (req: Request<{}, {}, RegisterRequest>, res: Response) => {
   try {
     const { username, email, password } = req.body;
 
-    // Check if user already exists
-    const existingUser: IUser | null = await User.findOne({
-      $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }]
+    const existingUser = await User.findOne({
+      $or: [
+        { email: email.toLowerCase().trim() }, 
+        { username: username.toLowerCase().trim() }
+      ]
     });
 
     if (existingUser) {
-      if (existingUser.email === email.toLowerCase()) {
+      if (existingUser.email === email.toLowerCase().trim()) {
         res.status(409).json({
           success: false,
           message: 'An account with this email already exists',
@@ -96,7 +106,6 @@ router.post('/register', validateRegistration, async (req: Request<{}, {}, Regis
       }
     }
 
-    // Create new user
     const user: IUser = new User({
       username: username.trim(),
       email: email.toLowerCase().trim(),
@@ -105,18 +114,7 @@ router.post('/register', validateRegistration, async (req: Request<{}, {}, Regis
 
     await user.save();
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { 
-        userId: user._id, 
-        email: user.email, 
-        username: user.username 
-      },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '7d' }
-    );
-
-    // Set auth cookie
+    const token = generateToken(user);
     setAuthCookie(res, token);
 
     res.status(201).json({
@@ -124,7 +122,18 @@ router.post('/register', validateRegistration, async (req: Request<{}, {}, Regis
       message: 'Account created successfully',
       data: {
         token,
-        user: createUserResponse(user)
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          chips: user.chips,
+          level: user.level,
+          gamesPlayed: user.gamesPlayed,
+          gamesWon: user.gamesWon,
+          totalWinnings: user.totalWinnings,
+          experience: user.experience,
+          createdAt: user.createdAt || new Date()
+        }
       }
     });
   } catch (error: any) {
@@ -147,12 +156,11 @@ router.post('/register', validateRegistration, async (req: Request<{}, {}, Regis
   }
 });
 
-// Login
+// Login User
 router.post('/login', validateLogin, async (req: Request<{}, {}, LoginRequest>, res: Response) => {
   try {
     const { email, password } = req.body;
 
-    // Find user by email
     const user = await User.findOne({ 
       email: email.toLowerCase().trim() 
     }).select('+password');
@@ -166,7 +174,6 @@ router.post('/login', validateLogin, async (req: Request<{}, {}, LoginRequest>, 
       return;
     }
 
-    // Check password
     const isPasswordValid: boolean = await user.comparePassword(password);
     
     if (!isPasswordValid) {
@@ -178,18 +185,7 @@ router.post('/login', validateLogin, async (req: Request<{}, {}, LoginRequest>, 
       return;
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { 
-        userId: user._id, 
-        email: user.email, 
-        username: user.username 
-      },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '7d' }
-    );
-
-    // Set auth cookie
+    const token = generateToken(user);
     setAuthCookie(res, token);
 
     res.json({
@@ -197,7 +193,19 @@ router.post('/login', validateLogin, async (req: Request<{}, {}, LoginRequest>, 
       message: 'Login successful',
       data: {
         token,
-        user: createUserResponse(user)
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          chips: user.chips,
+          level: user.level,
+          gamesPlayed: user.gamesPlayed,
+          gamesWon: user.gamesWon,
+          totalWinnings: user.totalWinnings,
+          experience: user.experience,
+          winRate: user.gamesPlayed > 0 ? ((user.gamesWon / user.gamesPlayed) * 100).toFixed(1) : '0.0',
+          lastLogin: new Date().toISOString()
+        }
       }
     });
   } catch (error) {
@@ -210,25 +218,41 @@ router.post('/login', validateLogin, async (req: Request<{}, {}, LoginRequest>, 
   }
 });
 
-// Logout
-router.post('/logout', (req: Request, res: Response) => {
-  res.clearCookie('authToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    path: '/'
-  });
-  
-  res.json({
-    success: true,
-    message: 'Logged out successfully'
-  });
+// Logout User
+router.post('/logout', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const token = getTokenFromRequest(req);
+
+    if (token) {
+      blacklistToken(token);
+    }
+
+    clearAuthCookie(res);
+    
+    res.json({
+      success: true,
+      message: 'Logged out successfully',
+      data: {
+        loggedOut: true,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Logout failed',
+      code: 'LOGOUT_ERROR'
+    });
+  }
 });
 
-// Get current user profile
+// Get Current User Profile
 router.get('/profile', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const user = await User.findById(req.user!.userId).select('-password');
+    const userId = req.user!.userId;
+    
+    const user = await User.findById(userId).select('-password');
     
     if (!user) {
       res.status(404).json({
@@ -239,10 +263,32 @@ router.get('/profile', authMiddleware, async (req: AuthenticatedRequest, res: Re
       return;
     }
 
+    const winRate = user.gamesPlayed > 0 ? ((user.gamesWon / user.gamesPlayed) * 100).toFixed(1) : '0.0';
+    const lossRate = user.gamesPlayed > 0 ? (((user.gamesPlayed - user.gamesWon) / user.gamesPlayed) * 100).toFixed(1) : '0.0';
+    const averageWinnings = user.gamesWon > 0 ? Math.round(user.totalWinnings / user.gamesWon) : 0;
+
     res.json({
       success: true,
       data: {
-        user: createUserResponse(user)
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          chips: user.chips,
+          level: user.level,
+          gamesPlayed: user.gamesPlayed,
+          gamesWon: user.gamesWon,
+          gamesLost: user.gamesPlayed - user.gamesWon,
+          totalWinnings: user.totalWinnings,
+          experience: user.experience,
+          winRate: parseFloat(winRate),
+          lossRate: parseFloat(lossRate),
+          averageWinnings,
+          createdAt: user.createdAt || new Date(),
+          updatedAt: user.updatedAt || new Date(),
+          accountAge: user.createdAt ? Math.floor((new Date().getTime() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24)) : 0,
+          rank: user.level >= 10 ? 'Expert' : user.level >= 5 ? 'Advanced' : 'Beginner'
+        }
       }
     });
   } catch (error) {
@@ -255,10 +301,145 @@ router.get('/profile', authMiddleware, async (req: AuthenticatedRequest, res: Re
   }
 });
 
-// Verify token endpoint
+// Update User Profile
+router.put('/profile', authMiddleware, validateUpdateProfile, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { username, email } = req.body as UpdateProfileRequest;
+
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+      return;
+    }
+
+    if (username && username !== user.username) {
+      const existingUsername = await User.findOne({ 
+        username: username.toLowerCase().trim(),
+        _id: { $ne: userId }
+      });
+      
+      if (existingUsername) {
+        res.status(409).json({
+          success: false,
+          message: 'Username already taken',
+          code: 'USERNAME_EXISTS'
+        });
+        return;
+      }
+      user.username = username.trim();
+    }
+
+    if (email && email !== user.email) {
+      const existingEmail = await User.findOne({ 
+        email: email.toLowerCase().trim(),
+        _id: { $ne: userId }
+      });
+      
+      if (existingEmail) {
+        res.status(409).json({
+          success: false,
+          message: 'Email already registered',
+          code: 'EMAIL_EXISTS'
+        });
+        return;
+      }
+      user.email = email.toLowerCase().trim();
+    }
+
+    await user.save();
+
+    const newToken = generateToken(user);
+    setAuthCookie(res, newToken);
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        token: newToken,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          chips: user.chips,
+          level: user.level,
+          updatedAt: user.updatedAt || new Date()
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update profile',
+      code: 'UPDATE_PROFILE_ERROR'
+    });
+  }
+});
+
+// Change Password
+router.put('/password', authMiddleware, validateChangePassword, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { currentPassword, newPassword } = req.body as ChangePasswordRequest;
+
+    const user = await User.findById(userId).select('+password');
+    
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+      return;
+    }
+
+    const isCurrentPasswordValid = await user.comparePassword(currentPassword);
+    if (!isCurrentPasswordValid) {
+      res.status(401).json({
+        success: false,
+        message: 'Current password is incorrect',
+        code: 'INVALID_CURRENT_PASSWORD'
+      });
+      return;
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    const newToken = generateToken(user);
+    setAuthCookie(res, newToken);
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully',
+      data: {
+        token: newToken,
+        passwordChanged: true,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to change password',
+      code: 'CHANGE_PASSWORD_ERROR'
+    });
+  }
+});
+
+// Verify Token
 router.get('/verify', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const user = await User.findById(req.user!.userId).select('-password');
+    const userId = req.user!.userId;
+    
+    const user = await User.findById(userId).select('-password');
     
     if (!user) {
       res.status(404).json({
@@ -273,23 +454,39 @@ router.get('/verify', authMiddleware, async (req: AuthenticatedRequest, res: Res
       success: true,
       message: 'Token is valid',
       data: {
-        user: createUserResponse(user)
+        valid: true,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          chips: user.chips,
+          level: user.level
+        },
+        tokenInfo: {
+          userId: req.user!.userId,
+          email: req.user!.email,
+          username: req.user!.username,
+          verified: true,
+          timestamp: new Date().toISOString()
+        }
       }
     });
   } catch (error) {
     console.error('Verify token error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to verify token',
+      message: 'Token verification failed',
       code: 'VERIFY_ERROR'
     });
   }
 });
 
-// Refresh token
+// Refresh Token
 router.post('/refresh', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const user = await User.findById(req.user!.userId);
+    const userId = req.user!.userId;
+    
+    const user = await User.findById(userId).select('-password');
     
     if (!user) {
       res.status(404).json({
@@ -300,26 +497,25 @@ router.post('/refresh', authMiddleware, async (req: AuthenticatedRequest, res: R
       return;
     }
 
-    // Generate new token
-    const token = jwt.sign(
-      { 
-        userId: user._id, 
-        email: user.email, 
-        username: user.username 
-      },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '7d' }
-    );
-
-    // Set new auth cookie
-    setAuthCookie(res, token);
+    const newToken = generateToken(user);
+    setAuthCookie(res, newToken);
 
     res.json({
       success: true,
       message: 'Token refreshed successfully',
       data: {
-        token,
-        user: createUserResponse(user)
+        token: newToken,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          chips: user.chips,
+          level: user.level,
+          gamesPlayed: user.gamesPlayed,
+          gamesWon: user.gamesWon
+        },
+        refreshed: true,
+        timestamp: new Date().toISOString()
       }
     });
   } catch (error) {
@@ -328,6 +524,73 @@ router.post('/refresh', authMiddleware, async (req: AuthenticatedRequest, res: R
       success: false,
       message: 'Failed to refresh token',
       code: 'REFRESH_ERROR'
+    });
+  }
+});
+
+// Get User Statistics
+router.get('/stats', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    
+    const user = await User.findById(userId).select('-password');
+    
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+      return;
+    }
+
+    const winRate = user.gamesPlayed > 0 ? ((user.gamesWon / user.gamesPlayed) * 100) : 0;
+    const lossRate = 100 - winRate;
+    const averageWinnings = user.gamesWon > 0 ? Math.round(user.totalWinnings / user.gamesWon) : 0;
+    const netProfit = user.totalWinnings - (user.gamesPlayed * 1000);
+    const experienceToNextLevel = (user.level * 1000) - user.experience;
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: user._id,
+          username: user.username,
+          level: user.level,
+          experience: user.experience,
+          experienceToNextLevel: Math.max(0, experienceToNextLevel)
+        },
+        gameStats: {
+          gamesPlayed: user.gamesPlayed,
+          gamesWon: user.gamesWon,
+          gamesLost: user.gamesPlayed - user.gamesWon,
+          winRate: parseFloat(winRate.toFixed(1)),
+          lossRate: parseFloat(lossRate.toFixed(1))
+        },
+        financialStats: {
+          currentChips: user.chips,
+          totalWinnings: user.totalWinnings,
+          averageWinnings,
+          netProfit,
+          profitability: netProfit >= 0 ? 'Profitable' : 'Loss'
+        },
+        achievements: {
+          rank: user.level >= 10 ? 'Expert' : user.level >= 5 ? 'Advanced' : 'Beginner',
+          accountAge: user.createdAt ? Math.floor((new Date().getTime() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24)) : 0,
+          badges: [
+            ...(user.gamesWon >= 10 ? ['Winner'] : []),
+            ...(user.totalWinnings >= 50000 ? ['High Roller'] : []),
+            ...(winRate >= 60 ? ['Skilled Player'] : [])
+          ]
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get user statistics',
+      code: 'STATS_ERROR'
     });
   }
 });

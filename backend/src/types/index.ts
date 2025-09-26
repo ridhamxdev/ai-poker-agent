@@ -48,6 +48,8 @@ export interface IUser extends Document {
   totalWinnings: number;
   level: number;
   experience: number;
+  createdAt?: Date;
+  updatedAt?: Date; 
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 

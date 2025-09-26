@@ -31,7 +31,7 @@ const validateRequest = (schema: Joi.ObjectSchema) => {
   };
 };
 
-// Authentication Schemas
+// Authentication Schemas (existing)
 export const registrationSchema = Joi.object({
   username: Joi.string()
     .alphanum()
@@ -79,7 +79,55 @@ export const loginSchema = Joi.object({
     })
 });
 
-// Game Schemas
+// NEW: Additional Authentication Schemas
+export const updateProfileSchema = Joi.object({
+  username: Joi.string()
+    .alphanum()
+    .min(3)
+    .max(30)
+    .optional()
+    .messages({
+      'string.alphanum': 'Username must contain only alphanumeric characters',
+      'string.min': 'Username must be at least 3 characters long',
+      'string.max': 'Username cannot exceed 30 characters'
+    }),
+  email: Joi.string()
+    .email({ tlds: { allow: false } })
+    .optional()
+    .messages({
+      'string.email': 'Please provide a valid email address'
+    })
+}).min(1).messages({
+  'object.min': 'At least one field must be provided for update'
+});
+
+export const changePasswordSchema = Joi.object({
+  currentPassword: Joi.string()
+    .required()
+    .messages({
+      'any.required': 'Current password is required'
+    }),
+  newPassword: Joi.string()
+    .min(6)
+    .max(128)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .required()
+    .messages({
+      'string.min': 'New password must be at least 6 characters long',
+      'string.max': 'New password cannot exceed 128 characters',
+      'string.pattern.base': 'New password must contain at least one uppercase letter, one lowercase letter, and one number',
+      'any.required': 'New password is required'
+    }),
+  confirmPassword: Joi.string()
+    .valid(Joi.ref('newPassword'))
+    .required()
+    .messages({
+      'any.only': 'Password confirmation does not match new password',
+      'any.required': 'Password confirmation is required'
+    })
+});
+
+// Game Schemas (existing)
 export const createGameSchema = Joi.object({
   gameType: Joi.string()
     .valid('pvp', 'ai-training', 'ai-vs-human')
@@ -139,7 +187,7 @@ export const gameActionSchema = Joi.object({
     })
 });
 
-// AI Schemas
+// AI Schemas (existing)
 export const trainAISchema = Joi.object({
   difficulty: Joi.string()
     .valid('easy', 'medium', 'hard', 'expert')
@@ -207,7 +255,7 @@ export const personalitySchema = Joi.object({
     })
 });
 
-// Query parameter validation
+// Query parameter validation (existing)
 export const paginationSchema = Joi.object({
   page: Joi.number()
     .integer()
@@ -229,9 +277,11 @@ export const paginationSchema = Joi.object({
     })
 });
 
-// Validation middleware exports
+// Validation middleware exports (existing + new)
 export const validateRegistration = validateRequest(registrationSchema);
 export const validateLogin = validateRequest(loginSchema);
+export const validateUpdateProfile = validateRequest(updateProfileSchema); // NEW
+export const validateChangePassword = validateRequest(changePasswordSchema); // NEW
 export const validateCreateGame = validateRequest(createGameSchema);
 export const validateJoinGame = validateRequest(joinGameSchema);
 export const validateGameAction = validateRequest(gameActionSchema);
@@ -240,7 +290,7 @@ export const validateAIDecision = validateRequest(aiDecisionSchema);
 export const validateUpdateAIDifficulty = validateRequest(updateAIDifficultySchema);
 export const validatePersonality = validateRequest(personalitySchema);
 
-// Query validation middleware
+// Query validation middleware (existing)
 export const validatePagination = (req: Request, res: Response, next: NextFunction): void => {
   const { error, value } = paginationSchema.validate(req.query, { abortEarly: false });
   
