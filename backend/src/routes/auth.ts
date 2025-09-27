@@ -529,6 +529,55 @@ router.post('/refresh', authMiddleware, async (req: AuthenticatedRequest, res: R
   }
 });
 
+// Add Balance (Chips)
+router.post('/add-balance', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { amount } = req.body;
+
+    // Validate amount
+    if (!amount || typeof amount !== 'number' || amount <= 0 || amount > 10000) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid amount. Must be between 1 and 10,000 chips.',
+        code: 'INVALID_AMOUNT'
+      });
+      return;
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+      return;
+    }
+
+    // Add chips to user balance
+    user.chips += amount;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: `Successfully added ${amount} chips to your balance`,
+      data: {
+        newBalance: user.chips,
+        addedAmount: amount
+      }
+    });
+
+  } catch (error) {
+    console.error('Add balance error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add balance',
+      code: 'ADD_BALANCE_ERROR'
+    });
+  }
+});
+
 // Get User Statistics
 router.get('/stats', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {

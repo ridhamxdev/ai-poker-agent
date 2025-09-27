@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedUser } from '../types';
 
-interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
 }
 
@@ -26,6 +26,7 @@ export const verifyToken = (token: string): AuthenticatedUser => {
 
     return {
       userId: decoded.userId,
+      id: decoded.userId, // Add the missing 'id' property
       email: decoded.email,
       username: decoded.username || 'Unknown'
     };

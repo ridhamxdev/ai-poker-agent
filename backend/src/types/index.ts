@@ -17,12 +17,13 @@ export interface Player {
   username: string;
   chips: number;
   cards: Card[];
-  position: 'dealer' | 'smallBlind' | 'bigBlind';
+  position: 'dealer' | 'smallBlind' | 'bigBlind' | 'none';
   currentBet: number;
   totalBet: number;
   folded: boolean;
   allIn: boolean;
   isAI: boolean;
+  aiId?: string; // AI identifier for multiple AI instances
 }
 
 export interface GameAction {
@@ -69,6 +70,8 @@ export interface IGame extends Document {
   lastAction: GameAction;
   winner?: Winner;
   aiDifficulty: 'easy' | 'medium' | 'hard' | 'expert';
+  minAIPlayers?: number; // Minimum AI players requested by user
+  aiIds?: string[]; // AI instance IDs for the game
   startTime: Date;
   endTime?: Date;
 }

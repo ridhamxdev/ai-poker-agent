@@ -11,6 +11,7 @@ import connectDB from './config/database';
 import authRoutes from './routes/auth';
 import gameRoutes from './routes/game';
 import aiRoutes from './routes/ai';
+import aiGameRoutes from './routes/aiGame';
 import gameSocket from './sockets/gameSockets';
 
 dotenv.config();
@@ -57,6 +58,7 @@ connectDB();
 app.use('/api/auth', authRoutes);
 app.use('/api/game', gameRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/ai-game', aiGameRoutes);
 
 // Health check route
 app.get('/health', (req: Request, res: Response) => {

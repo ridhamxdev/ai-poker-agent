@@ -31,7 +31,7 @@ const playerSchema = new Schema<Player>({
   cards: [cardSchema],
   position: {
     type: String,
-    enum: ['dealer', 'smallBlind', 'bigBlind'],
+    enum: ['dealer', 'smallBlind', 'bigBlind', 'none'],
     required: true
   },
   currentBet: {
@@ -53,6 +53,10 @@ const playerSchema = new Schema<Player>({
   isAI: {
     type: Boolean,
     default: false
+  },
+  aiId: {
+    type: String,
+    default: null
   }
 });
 
@@ -141,6 +145,13 @@ const gameSchema = new Schema<IGame>({
     enum: ['easy', 'medium', 'hard', 'expert'],
     default: 'medium'
   },
+  minAIPlayers: {
+    type: Number,
+    default: 1
+  },
+  aiIds: [{
+    type: String
+  }],
   startTime: {
     type: Date,
     default: Date.now

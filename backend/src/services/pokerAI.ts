@@ -10,6 +10,8 @@ export class PokerAI {
   private trainingGames: number = 0;
   private opponentModel: OpponentModel;
   private personality: 'balanced' | 'aggressive' | 'defensive' | 'exploitative' = 'balanced';
+  private aiId: string;
+  private maxBetAmount: number = 900; // Set explicit betting limit
   private sessionState: {
     handsPlayed: number;
     recentResults: ('won' | 'lost')[];
@@ -19,15 +21,43 @@ export class PokerAI {
     recentResults: [],
     tiltFactor: 0
   };
-    setPersonality: any;
+  setPersonality: any;
 
-  constructor(difficulty: Difficulty = 'medium') {
+  constructor(difficulty: Difficulty = 'medium', aiId?: string) {
     this.cfrAgent = new CFRAgent();
     this.difficulty = difficulty;
     this.opponentModel = new OpponentModel();
+    this.aiId = aiId || `ai_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Set betting behavior based on difficulty
+    this.configureDifficultySettings();
     
     // Load pre-trained strategy if available
     this.loadStrategy();
+  }
+
+  private configureDifficultySettings(): void {
+    switch (this.difficulty) {
+      case 'easy':
+        this.maxBetAmount = 300; // Conservative betting
+        this.personality = 'defensive';
+        break;
+      case 'medium':
+        this.maxBetAmount = 600; // Moderate betting
+        this.personality = 'balanced';
+        break;
+      case 'hard':
+        this.maxBetAmount = 900; // Aggressive betting
+        this.personality = 'aggressive';
+        break;
+      case 'expert':
+        this.maxBetAmount = 1200; // Expert level betting
+        this.personality = 'exploitative';
+        break;
+      default:
+        this.maxBetAmount = 600;
+        this.personality = 'balanced';
+    }
   }
 
   async makeDecision(gameState: IGame, playerId: string): Promise<AIDecision> {
@@ -61,9 +91,41 @@ export class PokerAI {
     enhancedDecision = this.applyRiskManagement(enhancedDecision, gameState, player);
     
     // Final bluffing strategy with opponent awareness
-    const finalDecision = this.addAdvancedBluffingStrategy(enhancedDecision, gameState, player);
+    let finalDecision = this.addAdvancedBluffingStrategy(enhancedDecision, gameState, player);
+
+    // Apply betting limits based on difficulty
+    finalDecision = this.applyBettingLimits(finalDecision, gameState, player);
 
     return finalDecision;
+  }
+
+  private applyBettingLimits(decision: AIDecision, gameState: IGame, player: any): AIDecision {
+    if (decision.action === 'raise') {
+      // Ensure betting amount doesn't exceed the configured limit
+      const maxAllowedBet = Math.min(this.maxBetAmount, player.chips);
+      const currentBet = decision.amount || 0;
+      
+      if (currentBet > maxAllowedBet) {
+        decision.amount = maxAllowedBet;
+        decision.reasoning += ` (capped at ${maxAllowedBet} due to difficulty limit)`;
+      }
+      
+      // Ensure minimum bet is respected
+      const minBet = gameState.bigBlind;
+      if (decision.amount && decision.amount < minBet) {
+        decision.amount = minBet;
+      }
+    }
+    
+    return decision;
+  }
+
+  getId(): string {
+    return this.aiId;
+  }
+
+  getMaxBetAmount(): number {
+    return this.maxBetAmount;
   }
 
   private updatePersonality(): void {
