@@ -79,6 +79,7 @@ const clearAuthCookie = (res: Response): void => {
 // Register User
 router.post('/register', validateRegistration, async (req: Request<{}, {}, RegisterRequest>, res: Response) => {
   try {
+    console.log('Processing registration request for:', req.body.email);
     const { username, email, password } = req.body;
 
     const existingUser = await User.findOne({

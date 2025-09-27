@@ -75,8 +75,9 @@ export interface IGame extends Document {
 
 export interface AuthenticatedUser {
   userId: string;
+  id: string;
   email: string;
-  username?: string;
+  username: string;
 }
 
 export interface GameState {

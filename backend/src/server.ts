@@ -5,6 +5,7 @@ import cors from 'cors';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
+import morgan from 'morgan';
 
 import connectDB from './config/database';
 import authRoutes from './routes/auth';
@@ -32,6 +33,22 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request logging middleware
+app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
+
+// Custom logging middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`);
+    if (req.body && Object.keys(req.body).length > 0) {
+      console.log('Request Body:', JSON.stringify(req.body, null, 2));
+    }
+  });
+  next();
+});
 
 // Connect to MongoDB
 connectDB();

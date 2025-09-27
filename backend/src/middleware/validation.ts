@@ -20,6 +20,12 @@ const validateRequest = (schema: Joi.ObjectSchema) => {
         }))
       };
       
+      console.log('Validation failed:', {
+        path: req.path,
+        body: req.body,
+        errors: validationError.details
+      });
+      
       res.status(400).json({
         success: false,
         error: validationError
@@ -34,12 +40,10 @@ const validateRequest = (schema: Joi.ObjectSchema) => {
 // Authentication Schemas (existing)
 export const registrationSchema = Joi.object({
   username: Joi.string()
-    .alphanum()
-    .min(3)
-    .max(30)
+    .pattern(/^[a-zA-Z0-9\s]{3,30}$/)
     .required()
     .messages({
-      'string.alphanum': 'Username must contain only alphanumeric characters',
+      'string.pattern.base': 'Username must contain only letters, numbers, and spaces',
       'string.min': 'Username must be at least 3 characters long',
       'string.max': 'Username cannot exceed 30 characters',
       'any.required': 'Username is required'
