@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Users, Bot, Play, ArrowLeft, BarChart3, User, LogOut } from 'lucide-react';
@@ -10,7 +10,7 @@ const GameSelection = () => {
   // ✅ CORRECT - All hooks are inside the component function
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, isAuthenticated, isLoading } = useAuth(); // Only call useAuth ONCE
+  const { user, isLoading } = useAuth(); // Only call useAuth ONCE
   const { socket, isConnected, onlineUsers } = useSocket();
   
   const [selectedMode, setSelectedMode] = useState<'multiplayer' | 'ai' | null>(null);
@@ -36,11 +36,23 @@ const GameSelection = () => {
     );
   }
 
-  // Redirect if not authenticated
-  if (!user) {
+  // Redirect if not authenticated and not loading
+  if (!isLoading && !user) {
     console.log('No user found, redirecting to signin');
     navigate('/signin', { replace: true });
     return null;
+  }
+
+  // Don't render if still loading or no user
+  if (isLoading || !user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   // useEffect for socket setup
@@ -51,11 +63,11 @@ const GameSelection = () => {
       console.log('Socket available, setting up listeners');
       
       // Socket event listeners
-      socket.on('gameslist', (games) => {
+      socket.on('gameslist', (games: Game[]) => {
         setAvailableGames(games);
       });
 
-      socket.on('playerscount', (count) => {
+      socket.on('playerscount', (count: number) => {
         console.log('Online players:', count);
       });
 
@@ -85,7 +97,7 @@ const GameSelection = () => {
     visible: { 
       y: 0, 
       opacity: 1, 
-      transition: { duration: 0.6, ease: [0.43, 0.13, 0.23, 0.96] } 
+      transition: { duration: 0.6 } 
     }
   };
 
@@ -95,13 +107,34 @@ const GameSelection = () => {
     hover: { scale: 1.05, transition: { duration: 0.2 } }
   };
 
-  const handleGameSelect = (mode: 'ai' | 'multiplayer') => {
+  const handleGameSelect = useCallback((mode: 'ai' | 'multiplayer') => {
     if (mode === 'multiplayer') {
       navigate('/lobby');
     } else {
-      navigate('/poker-game', { state: { mode: 'ai' } });
+      navigate('/ai-game-setup');
     }
-  };
+  }, [navigate]);
+
+  const handleStatsClick = useCallback(() => {
+    navigate('/stats');
+  }, [navigate]);
+
+  const handleProfileClick = useCallback(() => {
+    navigate('/profile');
+  }, [navigate]);
+
+  const handleLogoutClick = useCallback(async () => {
+    try {
+      await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      navigate('/signin');
+    } catch (error) {
+      console.error('Logout error:', error);
+      navigate('/signin');
+    }
+  }, [navigate]);
 
   // Handle mode from location state
   useEffect(() => {
@@ -109,7 +142,7 @@ const GameSelection = () => {
     if (mode) {
       handleGameSelect(mode as 'ai' | 'multiplayer');
     }
-  }, [location.state]);
+  }, [location.state, handleGameSelect]);
 
   return (
     <div className="game-selection-page">
@@ -133,6 +166,7 @@ const GameSelection = () => {
               className="header-btn"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              onClick={handleStatsClick}
             >
               <BarChart3 size={20} />
               Stats
@@ -141,6 +175,7 @@ const GameSelection = () => {
               className="header-btn"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              onClick={handleProfileClick}
             >
               <User size={20} />
               Profile
@@ -149,6 +184,7 @@ const GameSelection = () => {
               className="header-btn logout-btn"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              onClick={handleLogoutClick}
             >
               <LogOut size={20} />
               Logout
@@ -255,22 +291,25 @@ const GameSelection = () => {
             transition={{ duration: 0.4 }}
           >
             {selectedMode === 'ai' ? (
-              <Link
-                to="/poker-game"
-                state={{ gameMode: 'ai' }}
+              <motion.button
                 className="btn btn-primary btn-large"
+                onClick={() => handleGameSelect('ai')}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 <Play size={20} />
-                Start AI Game
-              </Link>
+                Setup AI Game
+              </motion.button>
             ) : (
-              <button
+              <motion.button
                 className="btn btn-primary btn-large"
-                onClick={() => navigate('/lobby')}
+                onClick={() => handleGameSelect('multiplayer')}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 <Play size={20} />
                 Join Multiplayer Lobby
-              </button>
+              </motion.button>
             )}
           </motion.div>
         )}

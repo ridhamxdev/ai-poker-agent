@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, Navigate } from 'react-router-dom';
-import { ArrowLeft, DollarSign, Users } from 'lucide-react';
+import { Link, Navigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, DollarSign, Users, Bot } from 'lucide-react';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useAIGame } from '../contexts/AIGameContext';
 
 interface Card {
   suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
@@ -23,22 +24,50 @@ interface Player {
 
 const PokerGame = () => {
   const { currentGame, makeAction, leaveGame, error: socketError } = useSocket();
+  const { currentAIGame, makeAIAction, leaveAIGame, isLoading: aiLoading, error: aiError } = useAIGame();
   const { user } = useAuth();
+  const location = useLocation();
   const [playerAction, setPlayerAction] = useState<string>('');
+  const [gameMode, setGameMode] = useState<'multiplayer' | 'ai'>('multiplayer');
 
-  if (!currentGame) {
+  // Check if this is an AI game from route state
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.mode === 'ai') {
+      setGameMode('ai');
+    }
+  }, [location.state]);
+
+  // For AI games, redirect to game selection if no game state
+  if (gameMode === 'ai' && !currentAIGame) {
+    return <Navigate to="/ai-game-setup" />;
+  }
+
+  // For multiplayer games, redirect to lobby if no current game
+  if (gameMode === 'multiplayer' && !currentGame) {
     return <Navigate to="/lobby" />;
   }
 
-  const handlePlayerAction = (action: 'fold' | 'call' | 'bet' | 'raise' | 'check' | 'all-in', amount?: number) => {
+  const handlePlayerAction = async (action: 'fold' | 'call' | 'bet' | 'raise' | 'check' | 'all-in', amount?: number) => {
     if (!user) return;
 
     setPlayerAction(action);
-    makeAction({
-      playerId: user.id,
-      type: action,
-      amount
-    });
+
+    if (gameMode === 'ai') {
+      // Handle AI game action using the AI context
+      await makeAIAction({
+        playerId: user.id,
+        type: action,
+        amount
+      });
+    } else {
+      // Handle multiplayer game action
+      makeAction({
+        playerId: user.id,
+        type: action,
+        amount
+      });
+    }
   };
 
   const getPlayerPositions = (players: Player[]): Player[] => {
@@ -154,24 +183,51 @@ const PokerGame = () => {
     </motion.div>
   );
 
-  const isCurrentPlayer = user && currentGame && currentGame.currentTurn === currentGame.players.findIndex(p => p.id === user.id);
-  const currentPlayerState = user && currentGame?.players.find(p => p.id === user.id);
+  // Get the current game state (either multiplayer or AI)
+  const gameState = gameMode === 'ai' ? currentAIGame : currentGame;
+  const isLoading = gameMode === 'ai' ? aiLoading : false;
+  const gameError = gameMode === 'ai' ? aiError : socketError;
+  
+  const isCurrentPlayer = user && gameState && gameState.currentTurn === gameState.players.findIndex(p => 
+    gameMode === 'ai' ? p.username === user.username : p.id === user.id
+  );
+  const currentPlayerState = user && gameState?.players.find(p => 
+    gameMode === 'ai' ? p.username === user.username : p.id === user.id
+  );
+
+  const handleBackClick = () => {
+    if (gameMode === 'ai') {
+      leaveAIGame();
+      return '/ai-game-setup';
+    } else {
+      leaveGame();
+      return '/lobby';
+    }
+  };
+
+  if (!gameState) {
+    return (
+      <div className="poker-game loading">
+        <div className="loading-spinner">Loading game...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="poker-game">
       <div className="game-header">
-        <Link to="/lobby" className="back-link" onClick={() => leaveGame()}>
+        <Link to={handleBackClick()} className="back-link">
           <ArrowLeft size={20} />
-          Back to Lobby
+          {gameMode === 'ai' ? 'Back to Setup' : 'Back to Lobby'}
         </Link>
         <div className="game-info">
           <div className="game-mode">
-            <Users size={20} />
-            Multiplayer Game
+            {gameMode === 'ai' ? <Bot size={20} /> : <Users size={20} />}
+            {gameMode === 'ai' ? 'AI Game' : 'Multiplayer Game'}
           </div>
           <div className="pot-info">
             <DollarSign size={20} />
-            Pot: ${currentGame.pot}
+            Pot: ${gameState.pot || 0}
           </div>
         </div>
       </div>
@@ -182,7 +238,7 @@ const PokerGame = () => {
             <h3>Community Cards</h3>
             <div className="cards-container">
               <AnimatePresence>
-                {currentGame.communityCards.map((card, index) => (
+                {(gameState.communityCards || []).map((card, index) => (
                   <motion.div
                     key={index}
                     initial={{ x: -100, opacity: 0 }}
@@ -198,7 +254,7 @@ const PokerGame = () => {
         </div>
 
         <div className="players-container">
-          {getPlayerPositions(currentGame.players).map(renderPlayer)}
+          {getPlayerPositions(gameState.players || []).map(renderPlayer)}
         </div>
       </div>
 
@@ -210,48 +266,52 @@ const PokerGame = () => {
               onClick={() => handlePlayerAction('fold')}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              disabled={isLoading}
             >
-              Fold
+              {isLoading ? 'Processing...' : 'Fold'}
             </motion.button>
-            {currentGame.currentBet === currentPlayerState.bet && (
+            {(gameState.currentBet || 0) === (currentPlayerState.bet || 0) && (
               <motion.button
                 className="btn btn-info"
                 onClick={() => handlePlayerAction('check')}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                disabled={isLoading}
               >
                 Check
               </motion.button>
             )}
-            {currentGame.currentBet > currentPlayerState.bet && (
+            {(gameState.currentBet || 0) > (currentPlayerState.bet || 0) && (
               <motion.button
                 className="btn btn-warning"
                 onClick={() => handlePlayerAction('call')}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                disabled={currentGame.currentBet >= currentPlayerState.chips}
+                disabled={(gameState.currentBet || 0) >= (currentPlayerState.chips || 0) || isLoading}
               >
-                Call (${currentGame.currentBet - currentPlayerState.bet})
+                Call (${(gameState.currentBet || 0) - (currentPlayerState.bet || 0)})
               </motion.button>
             )}
-            {currentPlayerState.chips > currentGame.currentBet && (
+            {(currentPlayerState.chips || 0) > (gameState.currentBet || 0) && (
               <motion.button
                 className="btn btn-success"
-                onClick={() => handlePlayerAction('raise', currentGame.currentBet * 2)}
+                onClick={() => handlePlayerAction('raise', (gameState.currentBet || 0) * 2)}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                disabled={isLoading}
               >
-                Raise (${currentGame.currentBet * 2})
+                Raise (${(gameState.currentBet || 0) * 2})
               </motion.button>
             )}
-            {currentPlayerState.chips > 0 && (
+            {(currentPlayerState.chips || 0) > 0 && (
               <motion.button
                 className="btn btn-primary"
                 onClick={() => handlePlayerAction('all-in')}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                disabled={isLoading}
               >
-                All-in (${currentPlayerState.chips})
+                All-in (${currentPlayerState.chips || 0})
               </motion.button>
             )}
           </div>

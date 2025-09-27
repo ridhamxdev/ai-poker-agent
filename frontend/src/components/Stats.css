@@ -1,0 +1,444 @@
+.stats-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+  color: white;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  padding: 2rem;
+}
+
+.stats-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.stats-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-bottom: 2rem;
+  transition: color 0.2s ease;
+}
+
+.back-button:hover {
+  color: #3b82f6;
+}
+
+.stats-header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 1rem 0;
+}
+
+.stats-header p {
+  color: #94a3b8;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.stats-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Overview Cards */
+.stats-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.overview-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: all 0.3s ease;
+}
+
+.overview-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.overview-card .card-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.games-card .card-icon {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+
+.wins-card .card-icon {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.winrate-card .card-icon {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.chips-card .card-icon {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+
+.overview-card .card-content h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem 0;
+  color: white;
+}
+
+.overview-card .card-content p {
+  color: #94a3b8;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Detailed Stats */
+.detailed-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 2rem;
+}
+
+.stats-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 1rem;
+  padding: 2rem;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.stats-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.card-header .card-icon {
+  color: #3b82f6;
+}
+
+.card-header h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Performance Metrics */
+.performance-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.metric-label {
+  color: #e2e8f0;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.metric-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.metric-fill {
+  height: 100%;
+  transition: width 0.8s ease;
+  border-radius: 4px;
+}
+
+.win-fill {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.success-fill {
+  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+}
+
+.metric-value {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Financial Metrics */
+.financial-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.financial-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.financial-item:last-child {
+  border-bottom: none;
+}
+
+.financial-item .label {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.financial-item .value {
+  font-weight: 600;
+  color: white;
+}
+
+.financial-item .value.positive {
+  color: #10b981;
+}
+
+.financial-item .value.negative {
+  color: #ef4444;
+}
+
+/* Level Progress */
+.level-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.level-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.current-level, .next-level {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.level-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+.level-label {
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  border-radius: 6px;
+  transition: width 0.8s ease;
+}
+
+.progress-text {
+  display: flex;
+  justify-content: space-between;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+/* Achievements */
+.achievements-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.rank-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  color: white;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.account-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.badges-section h4 {
+  color: #e2e8f0;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+}
+
+.badges-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.no-badges {
+  color: #64748b;
+  font-style: italic;
+  margin: 0;
+  text-align: center;
+  padding: 1rem;
+}
+
+/* Loading Spinner */
+.loading-spinner-large {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top: 3px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 4rem auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .stats-page {
+    padding: 1rem;
+  }
+
+  .stats-header h1 {
+    font-size: 2rem;
+  }
+
+  .stats-overview {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .overview-card {
+    padding: 1rem;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .overview-card .card-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .detailed-stats {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .stats-card {
+    padding: 1.5rem;
+  }
+
+  .level-info {
+    justify-content: space-around;
+  }
+
+  .level-number {
+    font-size: 1.5rem;
+  }
+
+  .financial-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-card {
+    flex-direction: row;
+    text-align: left;
+  }
+}
+
+
