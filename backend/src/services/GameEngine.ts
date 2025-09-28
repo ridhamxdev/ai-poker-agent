@@ -44,10 +44,15 @@ export class GameEngine {
         deck,
         gameState: 'preflop',
         dealerPosition: 0,
-        currentPlayer: players.length >= 3 ? 0 : 0, // Start with dealer (first to act after big blind)
+        currentPlayer: this.getFirstToAct(players.length), // Proper first to act calculation
         pot: 0,
         communityCards: [],
-        bettingRound: 0
+        bettingRound: 0,
+        smallBlind: 25,
+        bigBlind: 50,
+        currentBet: 0,
+        lastAction: null,
+        startTime: new Date()
       });
 
       // Deal hole cards
@@ -56,10 +61,25 @@ export class GameEngine {
       // Post blinds
       this.postBlinds(game);
 
+      // Set current bet to big blind
+      game.currentBet = game.bigBlind;
+
       await game.save();
       return game;
     } catch (error) {
       throw new Error(`Failed to initialize game: ${(error as Error).message}`);
+    }
+  }
+
+  private getFirstToAct(playerCount: number): number {
+    // In heads-up (2 players), dealer acts first preflop
+    // With 3+ players, first to act is left of big blind
+    if (playerCount === 2) {
+      return 0; // Dealer acts first in heads-up
+    } else if (playerCount === 3) {
+      return 0; // With 3 players: dealer(0), small blind(1), big blind(2) - dealer acts first after big blind
+    } else {
+      return 3; // With 4+ players: left of big blind acts first
     }
   }
 
@@ -105,10 +125,19 @@ export class GameEngine {
         p.userId?.toString() === playerId || p.username === playerId
       );
       
+      console.log(`Action attempt: playerId=${playerId}, playerIndex=${playerIndex}, currentPlayer=${game.currentPlayer}, players=${game.players.map(p => p.username)}`);
+      
       if (playerIndex === -1) throw new Error('Player not found');
-      if (playerIndex !== game.currentPlayer) throw new Error('Not your turn');
+      if (playerIndex !== game.currentPlayer) throw new Error(`Not your turn. Current player: ${game.currentPlayer}, Your index: ${playerIndex}`);
+      if (game.gameState === 'finished') throw new Error('Game is finished');
 
       const player = game.players[playerIndex];
+      if (player.folded) throw new Error('Player has already folded');
+      if (player.allIn) throw new Error('Player is all-in');
+
+      const callAmount = this.getCallAmount(game, playerIndex);
+      let actionAmount = 0;
+      let newCurrentBet = game.currentBet;
 
       switch (action.toLowerCase() as ActionType) {
         case 'fold':
@@ -116,27 +145,54 @@ export class GameEngine {
           break;
           
         case 'call':
-          const callAmount = this.getCallAmount(game, playerIndex);
-          player.chips -= callAmount;
-          player.currentBet += callAmount;
-          player.totalBet += callAmount;
-          game.pot += callAmount;
+          if (callAmount === 0) throw new Error('Nothing to call');
+          if (callAmount > player.chips) {
+            // All-in call
+            actionAmount = player.chips;
+            player.allIn = true;
+          } else {
+            actionAmount = callAmount;
+          }
+          player.chips -= actionAmount;
+          player.currentBet += actionAmount;
+          player.totalBet += actionAmount;
+          game.pot += actionAmount;
           break;
           
         case 'raise':
-          const raiseAmount = Math.min(amount, player.chips);
-          const toCall = this.getCallAmount(game, playerIndex);
-          const totalAmount = toCall + raiseAmount;
-          
-          player.chips -= totalAmount;
-          player.currentBet += totalAmount;
-          player.totalBet += totalAmount;
-          game.pot += totalAmount;
+          if (amount < game.bigBlind) throw new Error(`Minimum raise is ${game.bigBlind}`);
+          const totalRaiseAmount = callAmount + amount;
+          if (totalRaiseAmount > player.chips) {
+            // All-in raise
+            actionAmount = player.chips;
+            player.allIn = true;
+            newCurrentBet = player.currentBet + actionAmount;
+          } else {
+            actionAmount = totalRaiseAmount;
+            newCurrentBet = player.currentBet + actionAmount;
+          }
+          player.chips -= actionAmount;
+          player.currentBet += actionAmount;
+          player.totalBet += actionAmount;
+          game.pot += actionAmount;
+          game.currentBet = newCurrentBet;
           break;
           
         case 'check':
-          if (this.getCallAmount(game, playerIndex) > 0) {
+          if (callAmount > 0) {
             throw new Error('Cannot check, must call or fold');
+          }
+          break;
+
+        case 'all-in':
+          actionAmount = player.chips;
+          player.allIn = true;
+          player.chips = 0;
+          player.currentBet += actionAmount;
+          player.totalBet += actionAmount;
+          game.pot += actionAmount;
+          if (player.currentBet > game.currentBet) {
+            game.currentBet = player.currentBet;
           }
           break;
           
@@ -148,7 +204,7 @@ export class GameEngine {
       game.lastAction = {
         player: playerIndex,
         action: action.toLowerCase() as ActionType,
-        amount,
+        amount: actionAmount,
         timestamp: new Date()
       };
 
@@ -169,10 +225,24 @@ export class GameEngine {
   }
 
   private advanceGame(game: IGame): void {
+    // Check if only one player remains (everyone else folded)
+    const activePlayers = game.players.filter(p => !p.folded);
+    if (activePlayers.length <= 1) {
+      this.endHand(game);
+      return;
+    }
+
     // Move to next active player
+    let attempts = 0;
     do {
       game.currentPlayer = (game.currentPlayer + 1) % game.players.length;
-    } while (game.players[game.currentPlayer].folded);
+      attempts++;
+      if (attempts > game.players.length) {
+        // Safety check to prevent infinite loop
+        console.error('Infinite loop detected in advanceGame');
+        break;
+      }
+    } while (game.players[game.currentPlayer].folded || game.players[game.currentPlayer].allIn);
 
     // Check if betting round is complete
     if (this.isBettingRoundComplete(game)) {
@@ -182,16 +252,41 @@ export class GameEngine {
 
   private isBettingRoundComplete(game: IGame): boolean {
     const activePlayers = game.players.filter(p => !p.folded);
+    if (activePlayers.length <= 1) return true;
+    
     const maxBet = Math.max(...activePlayers.map(p => p.currentBet));
     
+    // Check if all active players have either matched the bet or are all-in
     return activePlayers.every(p => 
-      p.currentBet === maxBet || p.chips === 0
+      p.currentBet === maxBet || p.allIn || p.chips === 0
     );
   }
 
+  private endHand(game: IGame): void {
+    const activePlayers = game.players.filter(p => !p.folded);
+    
+    if (activePlayers.length === 1) {
+      // Only one player left, they win
+      const winner = activePlayers[0];
+      winner.chips += game.pot;
+      game.winner = {
+        playerId: winner.userId?.toString() || winner.username,
+        winningHand: 'Last Player Standing',
+        amount: game.pot
+      };
+    } else {
+      // Showdown - evaluate hands
+      this.showdown(game);
+    }
+    
+    game.gameState = 'finished';
+    game.endTime = new Date();
+  }
+
   private nextBettingRound(game: IGame): void {
-    // Reset current bets
+    // Reset current bets for next round
     game.players.forEach(p => p.currentBet = 0);
+    game.currentBet = 0;
     
     // Advance game state
     switch (game.gameState) {
@@ -208,13 +303,31 @@ export class GameEngine {
         game.gameState = 'river';
         break;
       case 'river':
-        this.showdown(game);
-        game.gameState = 'showdown';
-        break;
+        this.endHand(game);
+        return;
     }
 
-    // Set current player to first active player after dealer
-    game.currentPlayer = this.getFirstActivePlayer(game);
+    // Set current player to first active player after dealer (small blind)
+    game.currentPlayer = this.getFirstToActAfterDealer(game);
+  }
+
+  private getFirstToActAfterDealer(game: IGame): number {
+    const activePlayers = game.players.filter(p => !p.folded);
+    if (activePlayers.length <= 1) return 0;
+
+    // Find the dealer position among active players
+    let dealerIndex = game.dealerPosition;
+    while (game.players[dealerIndex].folded) {
+      dealerIndex = (dealerIndex + 1) % game.players.length;
+    }
+
+    // First to act is the next active player after dealer
+    let firstToAct = (dealerIndex + 1) % game.players.length;
+    while (game.players[firstToAct].folded) {
+      firstToAct = (firstToAct + 1) % game.players.length;
+    }
+
+    return firstToAct;
   }
 
   private dealFlop(game: IGame): void {
@@ -290,6 +403,71 @@ export class GameEngine {
       }
     }
     return 0;
+  }
+
+  // Start a new hand (for multi-hand games)
+  async startNewHand(gameId: string): Promise<IGame> {
+    try {
+      const game = await Game.findOne({ gameId });
+      if (!game) throw new Error('Game not found');
+
+      // Rotate dealer
+      game.dealerPosition = (game.dealerPosition + 1) % game.players.length;
+
+      // Reset game state for new hand
+      game.gameState = 'preflop';
+      game.pot = 0;
+      game.currentBet = 0;
+      game.communityCards = [];
+      game.bettingRound = 0;
+      // game.lastAction will be set when actions are made
+      game.winner = undefined;
+      game.endTime = undefined;
+
+      // Reset player states
+      game.players.forEach(player => {
+        player.cards = [];
+        player.currentBet = 0;
+        player.totalBet = 0;
+        player.folded = false;
+        player.allIn = false;
+        // Reset positions
+        player.position = 'none';
+      });
+
+      // Set new positions
+      this.setPlayerPositions(game);
+
+      // Create new deck and deal cards
+      game.deck = shuffleDeck(createDeck());
+      this.dealHoleCards(game);
+      this.postBlinds(game);
+
+      // Set current bet and first to act
+      game.currentBet = game.bigBlind;
+      game.currentPlayer = this.getFirstToAct(game.players.length);
+
+      await game.save();
+      return game;
+    } catch (error) {
+      throw new Error(`Failed to start new hand: ${(error as Error).message}`);
+    }
+  }
+
+  private setPlayerPositions(game: IGame): void {
+    const playerCount = game.players.length;
+    const dealerIndex = game.dealerPosition;
+
+    if (playerCount >= 3) {
+      // 3+ players: dealer, small blind, big blind
+      game.players[dealerIndex].position = 'dealer';
+      game.players[(dealerIndex + 1) % playerCount].position = 'smallBlind';
+      game.players[(dealerIndex + 2) % playerCount].position = 'bigBlind';
+    } else if (playerCount === 2) {
+      // Heads-up: dealer posts small blind, other player posts big blind
+      game.players[dealerIndex].position = 'dealer';
+      game.players[(dealerIndex + 1) % playerCount].position = 'bigBlind';
+    }
   }
 
   // Public getter methods

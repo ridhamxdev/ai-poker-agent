@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Users, GamepadIcon, Crown, Star, Eye, UserPlus, Clock, Trophy, DollarSign, ArrowLeft } from 'lucide-react';
+import { Users, GamepadIcon, Crown, Star, Eye, UserPlus, Clock, Trophy, DollarSign, ArrowLeft, X, Bell } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import WaitingRoom from './WaitingRoom';
 import './PokerLobby.css';
@@ -15,12 +15,15 @@ const PokerLobby: React.FC = () => {
     onlineUsers,
     error,
     waitingRoom,
+    notifications,
     createGame,
-    joinGame 
+    joinGame,
+    clearNotifications
   } = useSocket();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'games' | 'players'>('games');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   // Calculate stats
   const totalOnlinePlayers = onlineUsers.length;
@@ -110,20 +113,35 @@ const PokerLobby: React.FC = () => {
             </div>
           </div>
           
-          <motion.button
-            className="create-game-btn"
-            onClick={handleCreateGame}
-            disabled={!canCreateGame}
-            whileHover={{ scale: canCreateGame ? 1.05 : 1 }}
-            whileTap={{ scale: canCreateGame ? 0.95 : 1 }}
-            title={!canCreateGame ? `Need at least 3 players online to create a game (currently ${availableToPlay} available)` : 'Create a new poker game'}
-          >
-            <UserPlus size={20} />
-            Create Game
-            {!canCreateGame && (
-              <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>({availableToPlay}/3)</span>
-            )}
-          </motion.button>
+          <div className="lobby-actions">
+            <motion.button
+              className="notifications-btn"
+              onClick={() => setShowNotifications(!showNotifications)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              title="Notifications"
+            >
+              <Bell size={20} />
+              {notifications.length > 0 && (
+                <span className="notification-badge">{notifications.length}</span>
+              )}
+            </motion.button>
+            
+            <motion.button
+              className="create-game-btn"
+              onClick={handleCreateGame}
+              disabled={!canCreateGame}
+              whileHover={{ scale: canCreateGame ? 1.05 : 1 }}
+              whileTap={{ scale: canCreateGame ? 0.95 : 1 }}
+              title={!canCreateGame ? `Need at least 3 players online to create a game (currently ${availableToPlay} available)` : 'Create a new poker game'}
+            >
+              <UserPlus size={20} />
+              Create Game
+              {!canCreateGame && (
+                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>({availableToPlay}/3)</span>
+              )}
+            </motion.button>
+          </div>
         </motion.div>
 
         {error && (
@@ -135,6 +153,68 @@ const PokerLobby: React.FC = () => {
             {error}
           </motion.div>
         )}
+
+        {/* Notifications Panel */}
+        <AnimatePresence>
+          {showNotifications && (
+            <motion.div
+              className="notifications-panel"
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="notifications-header">
+                <h3>Notifications</h3>
+                <div className="notifications-actions">
+                  {notifications.length > 0 && (
+                    <button
+                      className="clear-notifications-btn"
+                      onClick={clearNotifications}
+                      title="Clear all notifications"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                  <button
+                    className="close-notifications-btn"
+                    onClick={() => setShowNotifications(false)}
+                    title="Close notifications"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="notifications-list">
+                {notifications.length === 0 ? (
+                  <div className="no-notifications">
+                    <Bell size={24} />
+                    <p>No notifications yet</p>
+                  </div>
+                ) : (
+                  notifications.map((notification) => (
+                    <motion.div
+                      key={notification.id}
+                      className={`notification-item ${notification.type}`}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <div className="notification-content">
+                        <div className="notification-message">{notification.message}</div>
+                        <div className="notification-time">
+                          {new Date(notification.timestamp).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Tab Navigation */}
         <motion.div 

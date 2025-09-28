@@ -29,10 +29,18 @@ interface GameState {
   id: string;
   players: Player[];
   state: 'waiting' | 'playing' | 'finished';
+  gameState: string;
   pot: number;
   communityCards: string[];
   currentTurn: number;
   currentBet: number;
+  smallBlind: number;
+  bigBlind: number;
+  winner?: {
+    playerId: string;
+    winningHand: string;
+    amount: number;
+  };
 }
 
 interface GameAction {
@@ -57,13 +65,16 @@ interface ServerToClientEvents {
   'connect_error': (error: Error) => void;
   'users:update': (users: Player[]) => void;
   'games:list': (games: GameRoom[]) => void;
-  'game:created': (data: { gameId: string; success: boolean }) => void;
+  'user:joined': (data: { id: string; username: string; socketId: string }) => void;
+  'user:left': (data: { id: string; username: string }) => void;
+  'game:created': (data: { gameId: string; success: boolean } | { gameId: string; createdBy: string; players: Player[]; maxPlayers: number }) => void;
   'game:waiting': (data: { gameId: string; players: Player[]; message: string; playersNeeded: number }) => void;
   'game:started': (data: { gameId: string; players: Player[]; state: GameState }) => void;
   'game:update': (data: { gameState: GameState; lastAction: GameAction }) => void;
   'game:roundEnd': (result: RoundResult) => void;
   'game:ended': (data: { message: string }) => void;
-  'player:left': (data: { playerId: string; username: string }) => void;
+  'player:joined': (data: { gameId: string; player: { id: string; username: string }; totalPlayers: number; maxPlayers: number }) => void;
+  'player:left': (data: { playerId: string; username: string } | { gameId: string; player: { id: string; username: string }; totalPlayers: number; maxPlayers: number }) => void;
   'game:error': (message: string) => void;
 }
 
@@ -87,11 +98,13 @@ interface SocketContextType {
   availableGames: GameRoom[];
   error: string | null;
   waitingRoom: { gameId: string; players: Player[]; message: string; playersNeeded: number } | null;
+  notifications: Array<{ id: string; type: 'info' | 'success' | 'warning' | 'error'; message: string; timestamp: number }>;
   createGame: () => void;
   joinGame: (gameId: string) => void;
   leaveGame: () => void;
   makeAction: (action: GameAction) => void;
   reconnect: () => void;
+  clearNotifications: () => void;
 }
 
 const SOCKET_URL = 'http://localhost:5000';
@@ -106,7 +119,24 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [availableGames, setAvailableGames] = useState<GameRoom[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [waitingRoom, setWaitingRoom] = useState<{ gameId: string; players: Player[]; message: string; playersNeeded: number } | null>(null);
+  const [notifications, setNotifications] = useState<Array<{ id: string; type: 'info' | 'success' | 'warning' | 'error'; message: string; timestamp: number }>>([]);
   const { user } = useAuth();
+
+  // Helper function to add notifications
+  const addNotification = useCallback((type: 'info' | 'success' | 'warning' | 'error', message: string) => {
+    const id = Date.now().toString();
+    const notification = { id, type, message, timestamp: Date.now() };
+    setNotifications(prev => [...prev, notification]);
+    
+    // Auto-remove notification after 5 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  }, []);
+
+  const clearNotifications = useCallback(() => {
+    setNotifications([]);
+  }, []);
 
   // In the initializeSocket function
   const initializeSocket = useCallback(() => {
@@ -117,8 +147,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   
     console.log('Initializing socket connection with token:', localStorage.getItem('token') ? 'Token exists' : 'No token');
   
-    const newSocket = io(SOCKET_URL, {
-      withCredentials: true,
+    const manager = new Manager(SOCKET_URL, {
       auth: {
         token: localStorage.getItem('token')
       },
@@ -127,11 +156,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       reconnectionDelay: 1000,
       timeout: 5000,
       transports: ['websocket', 'polling']
-    }) as GameSocket;
+    });
+    
+    const newSocket = manager.socket('/multiplayer') as GameSocket;
   
     // Connection events
     newSocket.on('connect', () => {
-      console.log('Connected to game server');
+      console.log('✅ Connected to multiplayer game server');
       setIsConnected(true);
       setError(null);
     });
@@ -142,26 +173,43 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
 
     newSocket.on('connect_error', (error: Error) => {
-      console.error('Connection error:', error.message);
+      console.error('❌ Connection error:', error.message);
       setError('Failed to connect to game server');
       setIsConnected(false);
     });
 
     // User events
     newSocket.on('users:update', (users: Player[]) => {
+      console.log('👥 Received users update:', users.length, 'users');
       setOnlineUsers(users);
+    });
+
+    newSocket.on('user:joined', (data: { id: string; username: string; socketId: string }) => {
+      if (data.id !== user?.id) {
+        addNotification('info', `${data.username} joined the lobby`);
+      }
+    });
+
+    newSocket.on('user:left', (data: { id: string; username: string }) => {
+      if (data.id !== user?.id) {
+        addNotification('info', `${data.username} left the lobby`);
+      }
     });
 
     // Game list events
     newSocket.on('games:list', (games: GameRoom[]) => {
+      console.log('🎮 Received games update:', games.length, 'games');
       setAvailableGames(games);
     });
 
     // Game events
-    newSocket.on('game:created', (data: { gameId: string; success: boolean }) => {
-      if (data.success) {
+    newSocket.on('game:created', (data: { gameId: string; success: boolean } | { gameId: string; createdBy: string; players: Player[]; maxPlayers: number }) => {
+      if ('success' in data && data.success) {
         console.log('Game created:', data.gameId);
         setError(null);
+        addNotification('success', 'Game created successfully!');
+      } else if ('createdBy' in data) {
+        addNotification('info', `${data.createdBy} created a new game`);
       }
     });
 
@@ -192,13 +240,25 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setCurrentGame(null);
     });
 
-    newSocket.on('player:left', (data: { playerId: string; username: string }) => {
-      console.log('Player left:', data.username);
+    newSocket.on('player:left', (data: { playerId: string; username: string } | { gameId: string; player: { id: string; username: string }; totalPlayers: number; maxPlayers: number }) => {
+      if ('playerId' in data) {
+        console.log('Player left:', data.username);
+        addNotification('warning', `${data.username} left the game`);
+      } else {
+        console.log('Player left game:', data.player.username);
+        addNotification('warning', `${data.player.username} left the game`);
+      }
+    });
+
+    newSocket.on('player:joined', (data: { gameId: string; player: { id: string; username: string }; totalPlayers: number; maxPlayers: number }) => {
+      console.log('Player joined game:', data.player.username);
+      addNotification('success', `${data.player.username} joined the game`);
     });
 
     newSocket.on('game:error', (message: string) => {
       console.error('Game error:', message);
       setError(message);
+      addNotification('error', message);
     });
 
     setSocket(newSocket);
@@ -257,11 +317,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     availableGames,
     error,
     waitingRoom,
+    notifications,
     createGame,
     joinGame,
     leaveGame,
     makeAction,
-    reconnect
+    reconnect,
+    clearNotifications
   };
 
   return (

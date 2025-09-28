@@ -28,7 +28,7 @@ export interface Player {
 
 export interface GameAction {
   player: number;
-  action: 'fold' | 'call' | 'raise' | 'check';
+  action: 'fold' | 'call' | 'raise' | 'check' | 'all-in';
   amount: number;
   timestamp: Date;
 }
@@ -67,6 +67,7 @@ export interface IGame extends Document {
   smallBlind: number;
   bigBlind: number;
   bettingRound: number;
+  currentBet: number;
   lastAction: GameAction;
   winner?: Winner;
   aiDifficulty: 'easy' | 'medium' | 'hard' | 'expert';
@@ -114,7 +115,7 @@ export interface CFRNode {
 
 export type GameType = 'pvp' | 'ai-training' | 'ai-vs-human';
 export type GameStateType = 'waiting' | 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'finished';
-export type ActionType = 'fold' | 'call' | 'raise' | 'check';
+export type ActionType = 'fold' | 'call' | 'raise' | 'check' | 'all-in';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert';
 
 export interface SocketUser extends AuthenticatedUser {

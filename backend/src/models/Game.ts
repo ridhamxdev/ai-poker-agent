@@ -67,7 +67,7 @@ const gameActionSchema = new Schema<GameAction>({
   },
   action: {
     type: String,
-    enum: ['fold', 'call', 'raise', 'check'],
+    enum: ['fold', 'call', 'raise', 'check', 'all-in'],
     required: true
   },
   amount: {
@@ -135,6 +135,10 @@ const gameSchema = new Schema<IGame>({
     default: 100
   },
   bettingRound: {
+    type: Number,
+    default: 0
+  },
+  currentBet: {
     type: Number,
     default: 0
   },

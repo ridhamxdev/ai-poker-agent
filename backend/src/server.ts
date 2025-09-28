@@ -13,6 +13,7 @@ import gameRoutes from './routes/game';
 import aiRoutes from './routes/ai';
 import aiGameRoutes from './routes/aiGame';
 import gameSocket from './sockets/gameSockets';
+import multiplayerSocket from './sockets/multiplayerSockets';
 
 dotenv.config();
 
@@ -69,8 +70,13 @@ app.get('/health', (req: Request, res: Response) => {
   });
 });
 
-// Socket handling
+// Socket handling - use namespaces to separate AI games from multiplayer games
+const aiNamespace = io.of('/ai');
+const multiplayerNamespace = io.of('/multiplayer');
+
+// Pass the full io server instance rather than just the namespace
 gameSocket(io);
+multiplayerSocket(io);
 
 // Global error handler
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {

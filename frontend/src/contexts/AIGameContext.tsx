@@ -8,6 +8,13 @@ interface AIGameState {
   communityCards: any[];
   currentTurn: number;
   currentBet: number;
+  smallBlind: number;
+  bigBlind: number;
+  winner?: {
+    playerId: string;
+    winningHand: string;
+    amount: number;
+  };
 }
 
 interface AIGameContextType {
@@ -50,8 +57,11 @@ export const AIGameProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           gameState: data.data.gameState || 'preflop',
           pot: data.data.pot || 0,
           communityCards: data.data.communityCards || [],
-          currentTurn: data.data.currentTurn || 0,
-          currentBet: data.data.currentBet || 0
+          currentTurn: data.data.currentPlayer || data.data.currentTurn || 0,
+          currentBet: data.data.currentBet || 0,
+          smallBlind: data.data.smallBlind || 25,
+          bigBlind: data.data.bigBlind || 50,
+          winner: data.data.winner
         };
         console.log('AI Game created successfully:', gameState);
         setCurrentAIGame(gameState);
@@ -98,8 +108,11 @@ export const AIGameProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           gameState: gameStateData.gameState || 'playing',
           pot: gameStateData.pot || 0,
           communityCards: gameStateData.communityCards || [],
-          currentTurn: gameStateData.currentPlayer || 0,
-          currentBet: Math.max(...(gameStateData.players || []).map((p: any) => p.currentBet || 0))
+          currentTurn: gameStateData.currentPlayer || gameStateData.currentTurn || 0,
+          currentBet: gameStateData.currentBet || Math.max(...(gameStateData.players || []).map((p: any) => p.currentBet || 0)),
+          smallBlind: gameStateData.smallBlind || 25,
+          bigBlind: gameStateData.bigBlind || 50,
+          winner: gameStateData.winner
         };
         console.log('Updated game state after action:', updatedGameState);
         setCurrentAIGame(updatedGameState);

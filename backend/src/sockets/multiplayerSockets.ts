@@ -41,7 +41,7 @@ export default (io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap>
   io.on('connection', (socket: Socket<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap>) => {
     const authenticatedSocket = socket as AuthenticatedSocket;
     const { user } = authenticatedSocket;
-    console.log(`User connected: ${user.username}`);
+    console.log(`🎮 Multiplayer: User connected: ${user.username} (${user.id})`);
 
     // Add user to connected users
     connectedUsers.set(user.id, {
@@ -50,6 +50,29 @@ export default (io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap>
       socketId: socket.id
     });
 
+    // Send current user list and game list to the newly connected user
+    const usersList = Array.from(connectedUsers.values());
+    const gamesList = Array.from(gameRooms.values()).map(room => ({
+      id: room.id,
+      players: room.players,
+      maxPlayers: room.maxPlayers,
+      state: room.state,
+      pot: room.pot,
+      currentBet: room.currentBet,
+      currentTurn: room.currentTurn
+    }));
+    
+    console.log(`📊 Sending to ${user.username}: ${usersList.length} users, ${gamesList.length} games`);
+    socket.emit('users:update', usersList);
+    socket.emit('games:list', gamesList);
+
+    // Broadcast updated user list to all other users
+    socket.broadcast.emit('user:joined', {
+      id: user.id,
+      username: user.username,
+      socketId: socket.id
+    });
+    
     // Broadcast updated user list
     io.emit('users:update', Array.from(connectedUsers.values()));
 
@@ -108,6 +131,14 @@ export default (io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap>
         currentBet: room.currentBet,
         currentTurn: room.currentTurn
       })));
+
+      // Broadcast game creation to all users
+      socket.broadcast.emit('game:created', {
+        gameId,
+        createdBy: user.username,
+        players: [player],
+        maxPlayers: gameRoom.maxPlayers
+      });
 
       socket.emit('game:created', { gameId, success: true });
       console.log(`Game created: ${gameId} by ${user.username}`);
@@ -179,6 +210,17 @@ export default (io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap>
         currentBet: room.currentBet,
         currentTurn: room.currentTurn
       })));
+
+      // Broadcast player joined to all users
+      socket.broadcast.emit('player:joined', {
+        gameId,
+        player: {
+          id: user.id,
+          username: user.username
+        },
+        totalPlayers: gameRoom.players.length,
+        maxPlayers: gameRoom.maxPlayers
+      });
     });
 
     // Handle player leaving game
@@ -233,6 +275,17 @@ export default (io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap>
         currentTurn: room.currentTurn
       })));
 
+      // Broadcast player left to all users
+      socket.broadcast.emit('player:left', {
+        gameId,
+        player: {
+          id: user.id,
+          username: user.username
+        },
+        totalPlayers: gameRoom ? gameRoom.players.length : 0,
+        maxPlayers: gameRoom ? gameRoom.maxPlayers : 0
+      });
+
       console.log(`Player ${user.username} left game ${gameId}`);
     });
 
@@ -277,6 +330,12 @@ export default (io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap>
     // Handle disconnection
     socket.on('disconnect', () => {
       console.log(`User disconnected: ${user.username}`);
+      
+      // Broadcast user leaving to all other users
+      socket.broadcast.emit('user:left', {
+        id: user.id,
+        username: user.username
+      });
       
       // Remove user from connected users
       connectedUsers.delete(user.id);

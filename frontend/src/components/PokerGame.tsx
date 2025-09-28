@@ -5,6 +5,7 @@ import { ArrowLeft, DollarSign, Users, Bot } from 'lucide-react';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useAIGame } from '../contexts/AIGameContext';
+import './PokerGame.css';
 
 interface Card {
   suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
@@ -23,7 +24,7 @@ interface AIPlayer {
   allIn: boolean;
   isAI: boolean;
   aiId?: string;
-  position?: 'bottom' | 'left' | 'top' | 'right';
+  position?: 'bottom' | 'left' | 'top' | 'right' | 'dealer' | 'smallBlind' | 'bigBlind' | 'none';
   socketId?: string;
 }
 
@@ -34,6 +35,12 @@ const PokerGame = () => {
   const location = useLocation();
   const [playerAction, setPlayerAction] = useState<string>('');
   const [gameMode, setGameMode] = useState<'multiplayer' | 'ai' | null>(null);
+  const [showGameNotification, setShowGameNotification] = useState(false);
+  const [gameNotification, setGameNotification] = useState<{
+    type: 'start' | 'winner' | 'loser' | 'finish';
+    message: string;
+    details?: string;
+  } | null>(null);
 
   // Check if this is an AI game from route state
   useEffect(() => {
@@ -44,6 +51,39 @@ const PokerGame = () => {
       setGameMode('multiplayer');
     }
   }, [location.state]);
+
+  // Monitor game state changes for notifications
+  useEffect(() => {
+    const gameState = gameMode === 'ai' ? currentAIGame : currentGame;
+    if (!gameState) return;
+
+    // Show game start notification
+    if (gameState.gameState === 'preflop' && gameState.players?.length > 0) {
+      setGameNotification({
+        type: 'start',
+        message: 'New Hand Started!',
+        details: `Blinds: $${gameState.smallBlind || 25} / $${gameState.bigBlind || 50}`
+      });
+      setShowGameNotification(true);
+      setTimeout(() => setShowGameNotification(false), 3000);
+    }
+
+    // Show game finish notification
+    if (gameState.gameState === 'finished' && gameState.winner) {
+      const isWinner = gameState.winner.playerId === user?.id || 
+                      gameState.winner.playerId === user?.username;
+      
+      setGameNotification({
+        type: isWinner ? 'winner' : 'loser',
+        message: isWinner ? 'You Won!' : 'You Lost',
+        details: isWinner 
+          ? `Won $${gameState.winner.amount} with ${gameState.winner.winningHand}`
+          : `${gameState.winner.playerId} won with ${gameState.winner.winningHand}`
+      });
+      setShowGameNotification(true);
+      setTimeout(() => setShowGameNotification(false), 5000);
+    }
+  }, [gameMode, currentAIGame, currentGame, user]);
 
   // Don't render anything until we know the game mode
   if (gameMode === null) {
@@ -159,7 +199,21 @@ const PokerGame = () => {
     return suit === 'hearts' || suit === 'diamonds' ? '#e53e3e' : '#2d3748';
   };
 
-  const renderCard = (cardData: string | { suit: string; rank: string }, isHidden = false) => {
+  const renderCard = (cardData: string | { suit: string; rank: string } | null, isHidden = false) => {
+    // Handle empty or invalid card data
+    if (!cardData) {
+      return (
+        <motion.div
+          className="playing-card hidden"
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="card-back">🂠</div>
+        </motion.div>
+      );
+    }
+
     const card = parseCard(cardData);
     return (
       <motion.div
@@ -184,33 +238,62 @@ const PokerGame = () => {
     );
   };
 
-  const renderPlayer = (player: AIPlayer) => (
-    <motion.div
-      key={player.id}
-      className={`player player-${player.position} ${player.folded ? 'folded' : ''}`}
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.5 }}
-    >
-      <div className="player-info">
-        <div className="player-name">{player.username}</div>
-        <div className="player-chips">
-          <DollarSign size={16} />
-          {player.chips}
-        </div>
-        {player.currentBet > 0 && (
-          <div className="player-bet">Bet: ${player.currentBet}</div>
-        )}
-      </div>
-      <div className="player-cards">
-        {player.cards?.map((card, index) => (
-          <div key={index}>
-            {renderCard(card, player.id !== user?.id && player.userId !== user?.id)}
+  const renderPlayer = (player: AIPlayer, uiPosition: 'bottom' | 'left' | 'top' | 'right') => {
+    const isCurrentPlayer = gameState?.currentTurn === gameState?.players.findIndex(p => p.id === player.id || p.username === player.username || p.userId === player.userId);
+    const isDealer = player.position === 'dealer';
+    const isSmallBlind = player.position === 'smallBlind';
+    const isBigBlind = player.position === 'bigBlind';
+    
+    return (
+      <motion.div
+        key={player.id}
+        className={`player player-${uiPosition} ${player.folded ? 'folded' : ''} ${isCurrentPlayer ? 'current-player' : ''}`}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="player-info">
+          <div className="player-name">
+            {player.username}
+            {player.isAI && <Bot size={14} className="ai-icon" />}
           </div>
-        ))}
-      </div>
-    </motion.div>
-  );
+          <div className="player-chips">
+            <DollarSign size={16} />
+            {player.chips}
+          </div>
+          {player.currentBet > 0 && (
+            <div className="player-bet">Bet: ${player.currentBet}</div>
+          )}
+          {player.allIn && (
+            <div className="all-in-badge">ALL-IN</div>
+          )}
+        </div>
+        
+        {/* Position indicators */}
+        <div className="position-indicators">
+          {isDealer && <div className="dealer-button">D</div>}
+          {isSmallBlind && <div className="small-blind">SB</div>}
+          {isBigBlind && <div className="big-blind">BB</div>}
+        </div>
+        
+        <div className="player-cards">
+          {player.cards && player.cards.length > 0 ? (
+            player.cards.map((card, index) => (
+              <div key={index}>
+                {renderCard(card, player.id !== user?.id && player.userId !== user?.id)}
+              </div>
+            ))
+          ) : (
+            // Show placeholder cards if no cards are available
+            <>
+              <div>{renderCard(null, player.id !== user?.id && player.userId !== user?.id)}</div>
+              <div>{renderCard(null, player.id !== user?.id && player.userId !== user?.id)}</div>
+            </>
+          )}
+        </div>
+      </motion.div>
+    );
+  };
 
   // Get the current game state (either multiplayer or AI)
   const gameState = gameMode === 'ai' ? currentAIGame : currentGame;
@@ -218,7 +301,7 @@ const PokerGame = () => {
   const gameError = gameMode === 'ai' ? aiError : socketError;
   
   const playerIndex = gameState?.players.findIndex(p => 
-    gameMode === 'ai' ? p.username === user?.username : (p.id === user?.id || p.userId === user?.id)
+    gameMode === 'ai' ? p.username === user?.username : (p.id === user?.id || p.userId === user?.id || p.username === user?.username)
   );
   
   // Temporary fix: If currentTurn is out of bounds, assume it's the human player's turn
@@ -226,7 +309,7 @@ const PokerGame = () => {
   const validCurrentTurn = currentTurn < (gameState?.players.length || 0) ? currentTurn : 0;
   const isCurrentPlayer = user && gameState && validCurrentTurn === playerIndex;
   const currentPlayerState = user && gameState?.players.find(p => 
-    gameMode === 'ai' ? p.username === user.username : (p.id === user.id || p.userId === user.id)
+    gameMode === 'ai' ? p.username === user.username : (p.id === user.id || p.userId === user.id || p.username === user.username)
   );
 
   // Debug logging
@@ -289,28 +372,68 @@ const PokerGame = () => {
 
       <div className="poker-table">
         <div className="table-center">
+          {/* Game state and betting info */}
+          <div className="game-info-panel">
+            <div className="game-phase">
+              <span className="phase-label">Phase:</span>
+              <span className="phase-value">
+                {gameState.gameState === 'preflop' && '🃏 PREFLOP'}
+                {gameState.gameState === 'flop' && '🌊 FLOP'}
+                {gameState.gameState === 'turn' && '🔄 TURN'}
+                {gameState.gameState === 'river' && '🌊 RIVER'}
+                {gameState.gameState === 'showdown' && '👁️ SHOWDOWN'}
+                {gameState.gameState === 'finished' && '🏁 FINISHED'}
+                {!gameState.gameState && '🃏 PREFLOP'}
+              </span>
+            </div>
+            <div className="blinds-info">
+              <span className="blinds-label">Blinds:</span>
+              <span className="blinds-value">${gameState.smallBlind || 25} / ${gameState.bigBlind || 50}</span>
+            </div>
+            <div className="current-bet">
+              <span className="bet-label">Current Bet:</span>
+              <span className="bet-value">${gameState.currentBet || 0}</span>
+            </div>
+          </div>
+
           <div className="community-cards">
             <h3>Community Cards</h3>
             <div className="cards-container">
               <AnimatePresence>
-                {(gameState.communityCards || []).map((card, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ x: -100, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: index * 0.2 }}
-                  >
-                    {renderCard(card)}
-                  </motion.div>
-                ))}
+                {gameState.communityCards && gameState.communityCards.length > 0 ? (
+                  gameState.communityCards.map((card, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ x: -100, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      transition={{ delay: index * 0.2 }}
+                    >
+                      {renderCard(card)}
+                    </motion.div>
+                  ))
+                ) : (
+                  // Show placeholder for community cards
+                  <div className="community-placeholder">
+                    <span>Community cards will appear here</span>
+                  </div>
+                )}
               </AnimatePresence>
             </div>
+          </div>
+
+          {/* Pot display */}
+          <div className="pot-display">
+            <div className="pot-amount">
+              <DollarSign size={24} />
+              <span className="pot-value">${gameState.pot || 0}</span>
+            </div>
+            <div className="pot-label">POT</div>
           </div>
         </div>
 
         <div className="players-container">
           {gameMode === 'ai' 
-            ? getPlayerPositions(gameState.players as AIPlayer[] || []).map((player) => renderPlayer(player))
+            ? getPlayerPositions(gameState.players as AIPlayer[] || []).map((player) => renderPlayer(player, player.position as 'bottom' | 'left' | 'top' | 'right'))
             : (gameState.players || []).map((player: any) => (
                 <motion.div
                   key={player.id}
@@ -330,11 +453,19 @@ const PokerGame = () => {
                     )}
                   </div>
                   <div className="player-cards">
-                    {player.cards?.map((card: any, index: number) => (
-                      <div key={index}>
-                        {renderCard(card, player.id !== user?.id)}
-                      </div>
-                    ))}
+                    {player.cards && player.cards.length > 0 ? (
+                      player.cards.map((card: any, index: number) => (
+                        <div key={index}>
+                          {renderCard(card, player.id !== user?.id && player.userId !== user?.id)}
+                        </div>
+                      ))
+                    ) : (
+                      // Show placeholder cards if no cards are available
+                      <>
+                        <div>{renderCard(null, player.id !== user?.id && player.userId !== user?.id)}</div>
+                        <div>{renderCard(null, player.id !== user?.id && player.userId !== user?.id)}</div>
+                      </>
+                    )}
                   </div>
                 </motion.div>
               ))
@@ -355,6 +486,15 @@ const PokerGame = () => {
 
       {isCurrentPlayer && currentPlayerState && !currentPlayerState.folded && (
         <div className="game-controls">
+          <div className="action-info">
+            <div className="call-amount">
+              To call: ${(gameState.currentBet || 0) - (currentPlayerState.currentBet || 0)}
+            </div>
+            <div className="your-chips">
+              Your chips: ${currentPlayerState.chips || 0}
+            </div>
+          </div>
+          
           <div className="action-buttons">
             <motion.button
               className="btn btn-danger"
@@ -365,6 +505,8 @@ const PokerGame = () => {
             >
               {isLoading ? 'Processing...' : 'Fold'}
             </motion.button>
+            
+            {/* Check button - only show if no bet to call */}
             {(gameState.currentBet || 0) === (currentPlayerState.currentBet || 0) && (
               <motion.button
                 className="btn btn-info"
@@ -376,28 +518,46 @@ const PokerGame = () => {
                 Check
               </motion.button>
             )}
+            
+            {/* Call button - show if there's a bet to call */}
             {(gameState.currentBet || 0) > (currentPlayerState.currentBet || 0) && (
               <motion.button
                 className="btn btn-warning"
                 onClick={() => handlePlayerAction('call')}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                disabled={(gameState.currentBet || 0) >= (currentPlayerState.chips || 0) || isLoading}
-              >
-                Call (${(gameState.currentBet || 0) - (currentPlayerState.currentBet || 0)})
-              </motion.button>
-            )}
-            {(currentPlayerState.chips || 0) > (gameState.currentBet || 0) && (
-              <motion.button
-                className="btn btn-success"
-                onClick={() => handlePlayerAction('raise', (gameState.currentBet || 0) * 2)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
                 disabled={isLoading}
               >
-                Raise (${(gameState.currentBet || 0) * 2})
+                Call ${(gameState.currentBet || 0) - (currentPlayerState.currentBet || 0)}
               </motion.button>
             )}
+            
+            {/* Raise buttons - show different raise amounts */}
+            {(currentPlayerState.chips || 0) > (gameState.currentBet || 0) && (
+              <>
+                <motion.button
+                  className="btn btn-success"
+                  onClick={() => handlePlayerAction('raise', gameState.bigBlind || 50)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  disabled={isLoading}
+                >
+                  Raise ${gameState.bigBlind || 50}
+                </motion.button>
+                
+                <motion.button
+                  className="btn btn-success"
+                  onClick={() => handlePlayerAction('raise', (gameState.currentBet || 0) * 2)}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  disabled={isLoading}
+                >
+                  Raise ${(gameState.currentBet || 0) * 2}
+                </motion.button>
+              </>
+            )}
+            
+            {/* All-in button */}
             {(currentPlayerState.chips || 0) > 0 && (
               <motion.button
                 className="btn btn-primary"
@@ -406,7 +566,7 @@ const PokerGame = () => {
                 whileTap={{ scale: 0.95 }}
                 disabled={isLoading}
               >
-                All-in (${currentPlayerState.chips || 0})
+                All-in ${currentPlayerState.chips || 0}
               </motion.button>
             )}
           </div>
@@ -433,6 +593,45 @@ const PokerGame = () => {
         >
           Error: {gameError}
         </motion.div>
+      )}
+
+      {/* Game State Notifications */}
+      <AnimatePresence>
+        {showGameNotification && gameNotification && (
+          <motion.div
+            className={`game-notification ${gameNotification.type}-notification`}
+            initial={{ opacity: 0, scale: 0.8, y: -50 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: -50 }}
+            transition={{ duration: 0.3 }}
+          >
+            <h2>{gameNotification.message}</h2>
+            {gameNotification.details && (
+              <p>{gameNotification.details}</p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Winner/Loser Display on Table */}
+      {gameState?.gameState === 'finished' && gameState?.winner && (
+        <div className={`${gameState.winner.playerId === user?.id || gameState.winner.playerId === user?.username ? 'winner' : 'loser'}-display`}>
+          <h2>{gameState.winner.playerId === user?.id || gameState.winner.playerId === user?.username ? '🎉 YOU WON! 🎉' : '😞 You Lost'}</h2>
+          <p>{gameState.winner.winningHand}</p>
+          <p>Won: ${gameState.winner.amount}</p>
+          <motion.button
+            className="btn btn-success"
+            onClick={() => {
+              // TODO: Implement new hand functionality
+              console.log('Starting new hand...');
+            }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            style={{ marginTop: '1rem' }}
+          >
+            Deal New Hand
+          </motion.button>
+        </div>
       )}
     </div>
   );
