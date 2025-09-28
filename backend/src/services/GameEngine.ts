@@ -17,22 +17,34 @@ export class GameEngine {
       const game = new Game({
         gameId: this.gameId,
         gameType,
-        players: players.map((player, index) => ({
-          userId: player.userId || null,
-          username: player.username || `Player_${index + 1}`,
-          chips: player.chips || 5000,
-          cards: [],
-          position: index === 0 ? 'dealer' : index === 1 ? 'smallBlind' : 'bigBlind',
-          currentBet: 0,
-          totalBet: 0,
-          folded: false,
-          allIn: false,
-          isAI: player.isAI || false
-        } as Player)),
+        players: players.map((player, index) => {
+          let position: 'dealer' | 'smallBlind' | 'bigBlind' | 'none' = 'none';
+          if (players.length >= 3) {
+            if (index === 0) position = 'dealer';
+            else if (index === 1) position = 'smallBlind';
+            else if (index === 2) position = 'bigBlind';
+          } else if (players.length === 2) {
+            if (index === 0) position = 'dealer';
+            else if (index === 1) position = 'bigBlind';
+          }
+          
+          return {
+            userId: player.userId || null,
+            username: player.username || `Player_${index + 1}`,
+            chips: player.chips || 5000,
+            cards: [],
+            position,
+            currentBet: 0,
+            totalBet: 0,
+            folded: false,
+            allIn: false,
+            isAI: player.isAI || false
+          } as Player;
+        }),
         deck,
         gameState: 'preflop',
         dealerPosition: 0,
-        currentPlayer: 1, // Start with small blind
+        currentPlayer: players.length >= 3 ? 0 : 0, // Start with dealer (first to act after big blind)
         pot: 0,
         communityCards: [],
         bettingRound: 0

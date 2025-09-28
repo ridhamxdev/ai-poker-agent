@@ -46,7 +46,7 @@ export class AIManager {
   }
 
   selectAIsForGame(playerCount: number, minAIs: number): AIPlayerConfig[] {
-    const requiredAIs = Math.max(minAIs, playerCount - 1); // At least minAIs, but fill game
+    const requiredAIs = minAIs; // Use exactly the requested number of AIs
     const availableAIs = Array.from(this.aiConfigs.values());
     
     // Shuffle and select AIs with varied difficulties
@@ -84,17 +84,23 @@ export class AIManager {
   }
 
   async makeAIDecision(gameState: IGame, aiId: string): Promise<any> {
+    console.log(`makeAIDecision called for aiId: ${aiId}`);
     const ai = this.getAI(aiId);
     if (!ai) {
+      console.error(`AI with id ${aiId} not found. Available AIs:`, Array.from(this.aiInstances.keys()));
       throw new Error(`AI with id ${aiId} not found`);
     }
 
     const player = gameState.players.find(p => p.aiId === aiId);
     if (!player) {
+      console.error(`AI player not found in game state. Players:`, gameState.players.map(p => ({ username: p.username, aiId: p.aiId })));
       throw new Error(`AI player not found in game state`);
     }
 
-    return await ai.makeDecision(gameState, player.username);
+    console.log(`Making decision for AI ${player.username} (${aiId})`);
+    const decision = await ai.makeDecision(gameState, player.username);
+    console.log(`AI decision result:`, decision);
+    return decision;
   }
 
   observeGameAction(aiId: string, phase: string, action: string, amount: number, potSize: number): void {

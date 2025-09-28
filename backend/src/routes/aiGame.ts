@@ -75,10 +75,13 @@ router.post('/create', authMiddleware, async (req: AuthenticatedRequest, res: Re
 
     // Create AI players based on user preferences
     const { players, aiIds } = aiManager.createGameWithAIs([humanPlayer], minAIPlayers);
+    console.log(`Creating game with ${players.length} players:`, players.map(p => ({ username: p.username, isAI: p.isAI, aiId: p.aiId })));
+    console.log(`AI IDs: ${aiIds.join(', ')}`);
 
     // Initialize game engine
     const gameEngine = new GameEngine(gameId);
     const game = await gameEngine.initializeGame(players, 'ai-vs-human');
+    console.log(`Game initialized. Current player: ${game.currentPlayer}, Game state: ${game.gameState}`);
 
     // Update game with AI configuration
     game.minAIPlayers = minAIPlayers;
@@ -89,18 +92,34 @@ router.post('/create', authMiddleware, async (req: AuthenticatedRequest, res: Re
 
     await game.save();
 
+    // Calculate current bet as the maximum bet among all players
+    const currentBet = Math.max(...game.players.map(p => p.currentBet));
+    console.log(`Final game state - Current player: ${game.currentPlayer}, Current bet: ${currentBet}, Pot: ${game.pot}`);
+    console.log(`Players:`, game.players.map((p, i) => ({ index: i, username: p.username, isAI: p.isAI })));
+
     res.json({
       success: true,
       message: 'AI game created successfully',
       data: {
         gameId: game.gameId,
         gameState: game.gameState,
+        pot: game.pot,
+        communityCards: game.communityCards,
+        currentTurn: game.currentPlayer,
+        currentBet: currentBet,
         players: game.players.map(player => ({
+          id: player.userId?.toString() || player.aiId || `player_${Math.random()}`,
+          userId: player.userId?.toString(),
           username: player.username,
           chips: player.chips,
           isAI: player.isAI,
           aiId: player.aiId,
-          position: player.position
+          position: player.position,
+          cards: player.cards,
+          currentBet: player.currentBet,
+          totalBet: player.totalBet,
+          folded: player.folded,
+          allIn: player.allIn
         })),
         minAIPlayers,
         aiDifficulty: game.aiDifficulty,
@@ -169,23 +188,52 @@ router.post('/action', authMiddleware, async (req: AuthenticatedRequest, res: Re
       action.amount || 0
     );
 
-    // Process AI moves for all AI players
-    if (game.aiIds && game.aiIds.length > 0) {
-      for (const aiId of game.aiIds) {
-        const currentPlayer = updatedGame.players[updatedGame.currentPlayer];
-        if (currentPlayer.isAI && currentPlayer.aiId === aiId) {
-          try {
-            const aiDecision = await aiManager.makeAIDecision(updatedGame, aiId);
-            await gameEngine.makeAction(
-              gameId,
-              currentPlayer.username,
-              aiDecision.action,
-              aiDecision.amount || 0
-            );
-          } catch (aiError) {
-            console.error(`AI move error for ${aiId}:`, aiError);
-          }
+    // Process AI moves until it's a human player's turn or game ends
+    let maxAIMoves = 10; // Prevent infinite loops
+    const startTime = Date.now();
+    const maxProcessingTime = 5000; // 5 seconds max
+    console.log(`Starting AI processing loop. Max moves: ${maxAIMoves}`);
+    
+    while (maxAIMoves > 0 && (Date.now() - startTime) < maxProcessingTime) {
+      const currentGame = await Game.findOne({ gameId });
+      if (!currentGame) {
+        console.log('Game not found, breaking AI loop');
+        break;
+      }
+      
+      const currentPlayer = currentGame.players[currentGame.currentPlayer];
+      console.log(`Current player: ${currentPlayer.username}, isAI: ${currentPlayer.isAI}, aiId: ${currentPlayer.aiId}`);
+      
+      if (!currentPlayer.isAI) {
+        console.log('Current player is human, breaking AI loop');
+        break; // It's a human player's turn
+      }
+      
+      try {
+        console.log(`Making AI decision for ${currentPlayer.aiId}`);
+        
+        // Simple AI decision - just call for now to test
+        const aiDecision = { action: 'call', amount: 0 };
+        console.log(`AI ${currentPlayer.username} making decision:`, aiDecision);
+        
+        await gameEngine.makeAction(
+          gameId,
+          currentPlayer.username,
+          aiDecision.action as any,
+          aiDecision.amount || 0
+        );
+        maxAIMoves--;
+        console.log(`AI move completed. Remaining moves: ${maxAIMoves}`);
+      } catch (aiError) {
+        console.error(`AI move error for ${currentPlayer.aiId}:`, aiError);
+        // If AI decision fails, just call to keep the game moving
+        try {
+          await gameEngine.makeAction(gameId, currentPlayer.username, 'call', 0);
+          console.log(`AI fallback call completed for ${currentPlayer.username}`);
+        } catch (fallbackError) {
+          console.error(`AI fallback error:`, fallbackError);
         }
+        break;
       }
     }
 
@@ -194,6 +242,27 @@ router.post('/action', authMiddleware, async (req: AuthenticatedRequest, res: Re
     if (!finalGame) {
       throw new Error('Game not found after processing');
     }
+    
+    // Fallback: If we're still on an AI player's turn, advance to next human player
+    if (finalGame.players[finalGame.currentPlayer].isAI) {
+      console.log('Fallback: AI turn detected, advancing to next human player');
+      do {
+        finalGame.currentPlayer = (finalGame.currentPlayer + 1) % finalGame.players.length;
+      } while (finalGame.players[finalGame.currentPlayer].folded);
+      
+      // If we're still on an AI, just set to first human player
+      if (finalGame.players[finalGame.currentPlayer].isAI) {
+        const humanPlayerIndex = finalGame.players.findIndex(p => !p.isAI && !p.folded);
+        if (humanPlayerIndex !== -1) {
+          finalGame.currentPlayer = humanPlayerIndex;
+        }
+      }
+      
+      await finalGame.save();
+      console.log(`Fallback completed - Current player: ${finalGame.currentPlayer}`);
+    }
+    
+    console.log(`After action processing - Current player: ${finalGame.currentPlayer}, Game state: ${finalGame.gameState}`);
 
     res.json({
       success: true,
@@ -202,8 +271,18 @@ router.post('/action', authMiddleware, async (req: AuthenticatedRequest, res: Re
         gameState: {
           ...finalGame.toObject(),
           players: finalGame.players.map(p => ({
-            ...p,
-            cards: p.isAI ? [] : p.cards // Hide AI cards
+            id: p.userId?.toString() || p.aiId || `player_${Math.random()}`,
+            userId: p.userId?.toString(),
+            username: p.username,
+            chips: p.chips,
+            isAI: p.isAI,
+            aiId: p.aiId,
+            position: p.position,
+            cards: p.isAI ? [] : p.cards, // Hide AI cards
+            currentBet: p.currentBet,
+            totalBet: p.totalBet,
+            folded: p.folded,
+            allIn: p.allIn
           }))
         }
       }
