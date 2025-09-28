@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { Bot, Users, Target, ArrowLeft, Play } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAIGame } from '../contexts/AIGameContext';
-import { testAuth, testAIGameCreate } from '../utils/apiTest';
 import './AIGameSetup.css';
 
 interface AIGameConfig {
@@ -25,6 +24,7 @@ const AIGameSetup: React.FC = () => {
     if (!user) return;
 
     const success = await createAIGame(config);
+    
     if (success) {
       // Navigate to the game - the AIGameContext will provide the game state
       navigate('/poker-game', { 
@@ -185,21 +185,6 @@ const AIGameSetup: React.FC = () => {
             </div>
           )}
 
-          {/* Debug buttons - remove after testing */}
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', justifyContent: 'center' }}>
-            <button 
-              onClick={testAuth}
-              style={{ padding: '0.5rem 1rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '0.5rem' }}
-            >
-              Test Auth
-            </button>
-            <button 
-              onClick={testAIGameCreate}
-              style={{ padding: '0.5rem 1rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '0.5rem' }}
-            >
-              Test AI Create
-            </button>
-          </div>
 
           {user && user.chips < 1000 && (
             <div className="insufficient-chips-warning">

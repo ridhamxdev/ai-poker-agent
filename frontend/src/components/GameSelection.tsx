@@ -125,7 +125,7 @@ const GameSelection = () => {
 
   const handleLogoutClick = useCallback(async () => {
     try {
-      await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/logout`, {
+      await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include'
       });

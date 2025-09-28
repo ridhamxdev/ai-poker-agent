@@ -57,7 +57,7 @@ const Stats: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/stats`, {
+      const response = await fetch('/api/auth/stats', {
         credentials: 'include'
       });
       

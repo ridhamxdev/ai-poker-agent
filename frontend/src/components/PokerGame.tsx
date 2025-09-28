@@ -11,15 +11,20 @@ interface Card {
   rank: string;
 }
 
-interface Player {
+interface AIPlayer {
   id: string;
+  userId?: string;
   username: string;
   chips: number;
   cards?: string[];
-  bet: number;
+  currentBet: number;
+  totalBet: number;
   folded: boolean;
+  allIn: boolean;
+  isAI: boolean;
+  aiId?: string;
   position?: 'bottom' | 'left' | 'top' | 'right';
-  socketId: string;
+  socketId?: string;
 }
 
 const PokerGame = () => {
@@ -28,18 +33,26 @@ const PokerGame = () => {
   const { user } = useAuth();
   const location = useLocation();
   const [playerAction, setPlayerAction] = useState<string>('');
-  const [gameMode, setGameMode] = useState<'multiplayer' | 'ai'>('multiplayer');
+  const [gameMode, setGameMode] = useState<'multiplayer' | 'ai' | null>(null);
 
   // Check if this is an AI game from route state
   useEffect(() => {
     const state = location.state as any;
     if (state?.mode === 'ai') {
       setGameMode('ai');
+    } else {
+      setGameMode('multiplayer');
     }
   }, [location.state]);
 
+  // Don't render anything until we know the game mode
+  if (gameMode === null) {
+    return <div className="poker-game loading"><div className="loading-spinner">Loading game...</div></div>;
+  }
+
   // For AI games, redirect to game selection if no game state
-  if (gameMode === 'ai' && !currentAIGame) {
+  // Add a small loading state to prevent premature redirect
+  if (gameMode === 'ai' && !currentAIGame && !aiLoading) {
     return <Navigate to="/ai-game-setup" />;
   }
 
@@ -70,7 +83,7 @@ const PokerGame = () => {
     }
   };
 
-  const getPlayerPositions = (players: Player[]): Player[] => {
+  const getPlayerPositions = (players: AIPlayer[]): AIPlayer[] => {
     // Find current player's index
     const currentPlayerIndex = players.findIndex(p => p.id === user?.id);
     if (currentPlayerIndex === -1) return players;
@@ -101,19 +114,35 @@ const PokerGame = () => {
     });
   };
 
-  const parseCard = (cardString: string): Card => {
-    const rank = cardString.slice(0, -1);
-    const suit = cardString.slice(-1);
-    const suitMap: { [key: string]: 'hearts' | 'diamonds' | 'clubs' | 'spades' } = {
-      '♥': 'hearts',
-      '♦': 'diamonds',
-      '♣': 'clubs',
-      '♠': 'spades'
-    };
-    return {
-      rank,
-      suit: suitMap[suit] || 'spades'
-    };
+  const parseCard = (cardData: string | { suit: string; rank: string }): Card => {
+    // Handle both string format ("A♥") and object format ({suit: "hearts", rank: "A"})
+    if (typeof cardData === 'string') {
+      const rank = cardData.slice(0, -1);
+      const suit = cardData.slice(-1);
+      const suitMap: { [key: string]: 'hearts' | 'diamonds' | 'clubs' | 'spades' } = {
+        '♥': 'hearts',
+        '♦': 'diamonds',
+        '♣': 'clubs',
+        '♠': 'spades'
+      };
+      return {
+        rank,
+        suit: suitMap[suit] || 'spades'
+      };
+    } else if (cardData && typeof cardData === 'object' && cardData.suit && cardData.rank) {
+      // Handle object format
+      return {
+        rank: cardData.rank,
+        suit: cardData.suit as 'hearts' | 'diamonds' | 'clubs' | 'spades'
+      };
+    } else {
+      // Fallback for invalid data
+      console.warn('Invalid card data:', cardData);
+      return {
+        rank: 'A',
+        suit: 'spades'
+      };
+    }
   };
 
   const getCardSymbol = (suit: string) => {
@@ -130,8 +159,8 @@ const PokerGame = () => {
     return suit === 'hearts' || suit === 'diamonds' ? '#e53e3e' : '#2d3748';
   };
 
-  const renderCard = (cardString: string, isHidden = false) => {
-    const card = parseCard(cardString);
+  const renderCard = (cardData: string | { suit: string; rank: string }, isHidden = false) => {
+    const card = parseCard(cardData);
     return (
       <motion.div
         className={`playing-card ${isHidden ? 'hidden' : ''}`}
@@ -155,7 +184,7 @@ const PokerGame = () => {
     );
   };
 
-  const renderPlayer = (player: Player) => (
+  const renderPlayer = (player: AIPlayer) => (
     <motion.div
       key={player.id}
       className={`player player-${player.position} ${player.folded ? 'folded' : ''}`}
@@ -169,14 +198,14 @@ const PokerGame = () => {
           <DollarSign size={16} />
           {player.chips}
         </div>
-        {player.bet > 0 && (
-          <div className="player-bet">Bet: ${player.bet}</div>
+        {player.currentBet > 0 && (
+          <div className="player-bet">Bet: ${player.currentBet}</div>
         )}
       </div>
       <div className="player-cards">
         {player.cards?.map((card, index) => (
           <div key={index}>
-            {renderCard(card, player.id !== user?.id)}
+            {renderCard(card, player.id !== user?.id && player.userId !== user?.id)}
           </div>
         ))}
       </div>
@@ -188,20 +217,46 @@ const PokerGame = () => {
   const isLoading = gameMode === 'ai' ? aiLoading : false;
   const gameError = gameMode === 'ai' ? aiError : socketError;
   
-  const isCurrentPlayer = user && gameState && gameState.currentTurn === gameState.players.findIndex(p => 
-    gameMode === 'ai' ? p.username === user.username : p.id === user.id
+  const playerIndex = gameState?.players.findIndex(p => 
+    gameMode === 'ai' ? p.username === user?.username : (p.id === user?.id || p.userId === user?.id)
   );
+  
+  // Temporary fix: If currentTurn is out of bounds, assume it's the human player's turn
+  const currentTurn = gameState?.currentTurn || 0;
+  const validCurrentTurn = currentTurn < (gameState?.players.length || 0) ? currentTurn : 0;
+  const isCurrentPlayer = user && gameState && validCurrentTurn === playerIndex;
   const currentPlayerState = user && gameState?.players.find(p => 
-    gameMode === 'ai' ? p.username === user.username : p.id === user.id
+    gameMode === 'ai' ? p.username === user.username : (p.id === user.id || p.userId === user.id)
   );
+
+  // Debug logging
+  console.log('Game Debug:', {
+    gameMode,
+    user: user?.username,
+    gameState: gameState ? {
+      currentTurn: gameState.currentTurn,
+      players: gameState.players.map(p => ({ username: p.username, isAI: p.isAI })),
+      pot: gameState.pot,
+      currentBet: gameState.currentBet
+    } : null,
+    playerIndex,
+    isCurrentPlayer,
+    currentPlayerState: currentPlayerState ? {
+      username: currentPlayerState.username,
+      folded: currentPlayerState.folded,
+      currentBet: currentPlayerState.currentBet
+    } : null
+  });
+
+  const getBackPath = () => {
+    return gameMode === 'ai' ? '/ai-game-setup' : '/lobby';
+  };
 
   const handleBackClick = () => {
     if (gameMode === 'ai') {
       leaveAIGame();
-      return '/ai-game-setup';
     } else {
       leaveGame();
-      return '/lobby';
     }
   };
 
@@ -216,7 +271,7 @@ const PokerGame = () => {
   return (
     <div className="poker-game">
       <div className="game-header">
-        <Link to={handleBackClick()} className="back-link">
+        <Link to={getBackPath()} onClick={handleBackClick} className="back-link">
           <ArrowLeft size={20} />
           {gameMode === 'ai' ? 'Back to Setup' : 'Back to Lobby'}
         </Link>
@@ -254,8 +309,48 @@ const PokerGame = () => {
         </div>
 
         <div className="players-container">
-          {getPlayerPositions(gameState.players || []).map(renderPlayer)}
+          {gameMode === 'ai' 
+            ? getPlayerPositions(gameState.players as AIPlayer[] || []).map((player) => renderPlayer(player))
+            : (gameState.players || []).map((player: any) => (
+                <motion.div
+                  key={player.id}
+                  className={`player player-${player.position} ${player.folded ? 'folded' : ''}`}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <div className="player-info">
+                    <div className="player-name">{player.username}</div>
+                    <div className="player-chips">
+                      <DollarSign size={16} />
+                      {player.chips}
+                    </div>
+                    {player.bet > 0 && (
+                      <div className="player-bet">Bet: ${player.bet}</div>
+                    )}
+                  </div>
+                  <div className="player-cards">
+                    {player.cards?.map((card: any, index: number) => (
+                      <div key={index}>
+                        {renderCard(card, player.id !== user?.id)}
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              ))
+          }
         </div>
+      </div>
+
+      {/* Debug info */}
+      <div style={{ position: 'fixed', top: '10px', right: '10px', background: 'rgba(0,0,0,0.8)', color: 'white', padding: '10px', fontSize: '12px', zIndex: 1000 }}>
+        <div>isCurrentPlayer: {isCurrentPlayer ? 'true' : 'false'}</div>
+        <div>currentPlayerState: {currentPlayerState ? 'exists' : 'null'}</div>
+        <div>folded: {currentPlayerState?.folded ? 'true' : 'false'}</div>
+        <div>gameState.currentTurn: {gameState?.currentTurn}</div>
+        <div>validCurrentTurn: {validCurrentTurn}</div>
+        <div>playerIndex: {playerIndex}</div>
+        <div>players.length: {gameState?.players.length}</div>
       </div>
 
       {isCurrentPlayer && currentPlayerState && !currentPlayerState.folded && (
@@ -270,7 +365,7 @@ const PokerGame = () => {
             >
               {isLoading ? 'Processing...' : 'Fold'}
             </motion.button>
-            {(gameState.currentBet || 0) === (currentPlayerState.bet || 0) && (
+            {(gameState.currentBet || 0) === (currentPlayerState.currentBet || 0) && (
               <motion.button
                 className="btn btn-info"
                 onClick={() => handlePlayerAction('check')}
@@ -281,7 +376,7 @@ const PokerGame = () => {
                 Check
               </motion.button>
             )}
-            {(gameState.currentBet || 0) > (currentPlayerState.bet || 0) && (
+            {(gameState.currentBet || 0) > (currentPlayerState.currentBet || 0) && (
               <motion.button
                 className="btn btn-warning"
                 onClick={() => handlePlayerAction('call')}
@@ -289,7 +384,7 @@ const PokerGame = () => {
                 whileTap={{ scale: 0.95 }}
                 disabled={(gameState.currentBet || 0) >= (currentPlayerState.chips || 0) || isLoading}
               >
-                Call (${(gameState.currentBet || 0) - (currentPlayerState.bet || 0)})
+                Call (${(gameState.currentBet || 0) - (currentPlayerState.currentBet || 0)})
               </motion.button>
             )}
             {(currentPlayerState.chips || 0) > (gameState.currentBet || 0) && (
@@ -329,14 +424,14 @@ const PokerGame = () => {
         </motion.div>
       )}
 
-      {socketError && (
+      {gameError && (
         <motion.div
           className="error-feedback"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
         >
-          Error: {socketError}
+          Error: {gameError}
         </motion.div>
       )}
     </div>

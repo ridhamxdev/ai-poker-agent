@@ -123,8 +123,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         token: localStorage.getItem('token')
       },
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
+      reconnectionAttempts: 3,
+      reconnectionDelay: 1000,
+      timeout: 5000,
+      transports: ['websocket', 'polling']
     }) as GameSocket;
   
     // Connection events

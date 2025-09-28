@@ -32,7 +32,7 @@ export const AIGameProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setError(null);
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/ai-game/create`, {
+      const response = await fetch('/api/ai-game/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -47,12 +47,13 @@ export const AIGameProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const gameState: AIGameState = {
           gameId: data.data.gameId,
           players: data.data.players || [],
-          gameState: data.data.gameState || 'waiting',
+          gameState: data.data.gameState || 'preflop',
           pot: data.data.pot || 0,
           communityCards: data.data.communityCards || [],
           currentTurn: data.data.currentTurn || 0,
           currentBet: data.data.currentBet || 0
         };
+        console.log('AI Game created successfully:', gameState);
         setCurrentAIGame(gameState);
         return true;
       } else {
@@ -75,7 +76,7 @@ export const AIGameProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setError(null);
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/ai-game/action`, {
+      const response = await fetch('/api/ai-game/action', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -90,15 +91,17 @@ export const AIGameProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const data = await response.json();
       
       if (data.success) {
+        const gameStateData = data.data.gameState;
         const updatedGameState: AIGameState = {
-          gameId: data.data.gameState.gameId,
-          players: data.data.gameState.players || [],
-          gameState: data.data.gameState.gameState || 'playing',
-          pot: data.data.gameState.pot || 0,
-          communityCards: data.data.gameState.communityCards || [],
-          currentTurn: data.data.gameState.currentTurn || 0,
-          currentBet: data.data.gameState.currentBet || 0
+          gameId: gameStateData.gameId,
+          players: gameStateData.players || [],
+          gameState: gameStateData.gameState || 'playing',
+          pot: gameStateData.pot || 0,
+          communityCards: gameStateData.communityCards || [],
+          currentTurn: gameStateData.currentPlayer || 0,
+          currentBet: Math.max(...(gameStateData.players || []).map((p: any) => p.currentBet || 0))
         };
+        console.log('Updated game state after action:', updatedGameState);
         setCurrentAIGame(updatedGameState);
         return true;
       } else {

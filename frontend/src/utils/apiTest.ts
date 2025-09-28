@@ -1,7 +1,7 @@
 // Utility to test API authentication
 export const testAuth = async () => {
   try {
-    const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/profile`, {
+    const response = await fetch('/api/auth/profile', {
       credentials: 'include'
     });
     
@@ -16,7 +16,7 @@ export const testAuth = async () => {
 
 export const testAIGameCreate = async () => {
   try {
-    const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/ai-game/create`, {
+    const response = await fetch('/api/ai-game/create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

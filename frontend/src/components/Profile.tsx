@@ -51,7 +51,7 @@ const Profile: React.FC = () => {
 
   const fetchUserStats = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/profile`, {
+      const response = await fetch('/api/auth/profile', {
         credentials: 'include'
       });
       
@@ -75,7 +75,7 @@ const Profile: React.FC = () => {
 
     setIsAddingBalance(true);
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/add-balance`, {
+      const response = await fetch('/api/auth/add-balance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
