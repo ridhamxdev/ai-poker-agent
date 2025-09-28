@@ -18,10 +18,8 @@ A comprehensive poker game application featuring AI opponents, real-time multipl
 
 ## 🚀 Features
 
-### 🎮 Game Modes
-- **AI vs Human**: Play against intelligent AI opponents with different skill levels
-- **Multiplayer**: Real-time multiplayer poker with live player updates
-- **Tournament Mode**: Competitive gameplay with multiple players
+### 🎮 AI Game Mode
+- **AI vs Human**: Play against intelligent AI opponents with different skill levels (Beginner, Skilled, Expert)
 
 ### 🤖 AI Features
 - **Counterfactual Regret Minimization (CFR)**: Advanced poker strategy algorithm
@@ -29,69 +27,75 @@ A comprehensive poker game application featuring AI opponents, real-time multipl
 - **Bluffing Detection**: Intelligent bluffing and counter-bluffing strategies
 - **Risk Management**: Dynamic bet sizing based on hand strength and position
 
-### 🎯 Game Features
+### 🎯 AI Game Features
 - **Complete Poker Rules**: Texas Hold'em with all standard rules
-- **Real-time Updates**: Live game state synchronization
-- **Hand Evaluation**: Advanced hand ranking and comparison
-- **Position Tracking**: Dealer, small blind, big blind positions
-- **Betting Rounds**: Preflop, flop, turn, river with proper betting logic
+- **Real-time AI Updates**: Live AI decision making and game state synchronization
+- **Advanced Hand Evaluation**: AI hand ranking and comparison algorithms
+- **Position Tracking**: Dealer, small blind, big blind positions with AI awareness
+- **Intelligent Betting**: AI-driven betting rounds with strategic decision making
 
-### 🎨 UI/UX Features
-- **Modern Design**: Glass-morphism effects and professional casino aesthetics
-- **Responsive Layout**: Optimized for different screen sizes
-- **Real-time Notifications**: Game events and player actions
-- **Interactive Cards**: Animated card dealing and revealing
-- **Live Statistics**: Player stats and game history
+### 🎨 AI Game UI/UX Features
+- **Professional Poker Table**: Glass-morphism effects and casino-quality aesthetics
+- **AI Player Visualization**: Clear positioning of AI opponents around the table
+- **Real-time AI Notifications**: AI move announcements and game state updates
+- **Interactive Card System**: Animated card dealing with AI vs human distinction
+- **Community Cards Area**: Strategically positioned between AI players and human player
 
-## 🛠 Tech Stack
+## 🛠 AI Game Tech Stack
 
-### Backend
-- **Node.js** with **TypeScript**
-- **Express.js** - Web framework
-- **Socket.IO** - Real-time communication
-- **MongoDB** with **Mongoose** - Database
-- **JWT** - Authentication
-- **bcryptjs** - Password hashing
-- **Joi** - Input validation
+### Backend AI Stack
+- **Node.js** with **TypeScript** - AI game server
+- **Express.js** - AI game API framework
+- **Socket.IO** - Real-time AI game communication
+- **MongoDB** with **Mongoose** - AI game data storage
+- **CFR Algorithm** - Counterfactual Regret Minimization
+- **Opponent Modeling** - AI behavior analysis
 
-### Frontend
-- **React 18** with **TypeScript**
-- **Vite** - Build tool
-- **Tailwind CSS** - Styling
-- **Framer Motion** - Animations
-- **Socket.IO Client** - Real-time communication
-- **React Router** - Navigation
-- **Axios** - HTTP client
+### Frontend AI Stack
+- **React 18** with **TypeScript** - AI game interface
+- **Vite** - AI game build tool
+- **Tailwind CSS** - AI game styling
+- **Framer Motion** - AI game animations
+- **Socket.IO Client** - Real-time AI communication
+- **React Context** - AI game state management
 
-## 📁 Project Structure
+## 📁 AI Game Project Structure
 
 ```
-Poker_ai_backend/
-├── backend/                    # Backend application
-│   ├── src/                   # Source code
-│   │   ├── config/           # Configuration files
-│   │   ├── middleware/       # Express middleware
-│   │   ├── models/          # Database models
-│   │   ├── routes/          # API routes
-│   │   ├── services/        # Business logic
-│   │   ├── sockets/         # Socket.IO handlers
-│   │   ├── types/           # TypeScript definitions
-│   │   ├── utils/           # Utility functions
-│   │   └── server.ts        # Main server file
-│   ├── dist/                # Compiled JavaScript
-│   ├── package.json         # Dependencies
-│   └── tsconfig.json        # TypeScript config
-├── frontend/                 # Frontend application
-│   ├── src/                 # Source code
-│   │   ├── components/      # React components
-│   │   ├── contexts/        # React contexts
-│   │   ├── config/          # Configuration
-│   │   ├── utils/           # Utility functions
-│   │   └── main.tsx         # Entry point
-│   ├── public/              # Static assets
-│   ├── package.json         # Dependencies
-│   └── vite.config.ts       # Vite configuration
-└── README.md                # This file
+ai-poker-agent/
+├── backend/                    # AI Game Backend
+│   ├── src/                   # AI Game Source Code
+│   │   ├── routes/           # AI Game API routes
+│   │   │   ├── ai.ts         # AI game routes
+│   │   │   └── aiGame.ts     # AI game specific routes
+│   │   ├── services/         # AI Game Logic
+│   │   │   ├── GameEngine.ts # Core AI game logic
+│   │   │   ├── pokerAI.ts    # AI decision making
+│   │   │   ├── cfrAgent.ts   # CFR algorithm
+│   │   │   ├── opponentModel.ts # AI opponent modeling
+│   │   │   └── AIManager.ts  # AI coordination
+│   │   ├── sockets/          # AI Game Sockets
+│   │   │   └── gameSockets.ts # AI game socket handling
+│   │   ├── utils/            # AI Game Utilities
+│   │   │   ├── cards.ts      # Card utilities
+│   │   │   └── handEvaluator.ts # Hand evaluation
+│   │   └── types/            # AI Game Types
+│   │       ├── index.ts      # AI game type definitions
+│   │       └── game.types.ts # AI game-specific types
+│   └── package.json          # AI Game Dependencies
+├── frontend/                 # AI Game Frontend
+│   ├── src/                 # AI Game Source Code
+│   │   ├── components/      # AI Game Components
+│   │   │   ├── PokerGame.tsx # Main AI game interface
+│   │   │   ├── AIGameSetup.tsx # AI game setup
+│   │   │   ├── PokerGame.css # AI game styling
+│   │   │   └── AIGameSetup.css # AI setup styling
+│   │   ├── contexts/        # AI Game Contexts
+│   │   │   └── AIGameContext.tsx # AI game state management
+│   │   └── config/          # AI Game Configuration
+│   │       └── index.ts     # AI game API configuration
+│   └── package.json         # AI Game Dependencies
+└── README.md                # AI Game Documentation
 ```
 
 ## 🚀 Installation
@@ -101,14 +105,14 @@ Poker_ai_backend/
 - MongoDB (local or cloud instance)
 - npm or yarn
 
-### Backend Setup
+### AI Game Backend Setup
 
 1. **Navigate to backend directory**
    ```bash
    cd backend
    ```
 
-2. **Install dependencies**
+2. **Install AI game dependencies**
    ```bash
    npm install
    ```
@@ -122,84 +126,66 @@ Poker_ai_backend/
    NODE_ENV=development
    ```
 
-4. **Build the project**
+4. **Build the AI game project**
    ```bash
    npm run build
    ```
 
-### Frontend Setup
+### AI Game Frontend Setup
 
 1. **Navigate to frontend directory**
    ```bash
    cd frontend
    ```
 
-2. **Install dependencies**
+2. **Install AI game dependencies**
    ```bash
    npm install
    ```
 
 ## ⚙️ Configuration
 
-### Backend Configuration
+### AI Game Configuration
 
-#### Database Configuration (`backend/src/config/database.ts`)
-- MongoDB connection setup
-- Connection options and error handling
-- Database initialization
-
-#### Server Configuration (`backend/src/server.ts`)
-- Express server setup
-- CORS configuration
-- Socket.IO namespaces (`/ai` and `/multiplayer`)
-- Route mounting
-- Error handling middleware
-
-### Frontend Configuration
-
-#### API Configuration (`frontend/src/config/index.ts`)
-- Backend API endpoints
-- Socket.IO connection settings
-- Environment-specific configurations
-
-#### Vite Configuration (`frontend/vite.config.ts`)
-- Development server settings
-- Build optimization
-- Proxy configuration for API calls
+#### AI Game API Configuration (`frontend/src/config/index.ts`)
+- AI game API endpoints
+- Socket.IO connection settings for AI games
+- AI difficulty configurations
+- Game parameters and settings
 
 ## 🏃‍♂️ Running the Application
 
-### Development Mode
+### AI Game Development Mode
 
 1. **Start MongoDB** (if running locally)
    ```bash
    mongod
    ```
 
-2. **Start Backend Server**
+2. **Start AI Game Backend Server**
    ```bash
    cd backend
    npm run dev
    ```
-   Server will run on `http://localhost:5000`
+   AI game server will run on `http://localhost:5000`
 
-3. **Start Frontend Development Server**
+3. **Start AI Game Frontend**
    ```bash
    cd frontend
    npm run dev
    ```
-   Frontend will run on `http://localhost:3000`
+   AI game frontend will run on `http://localhost:3000`
 
-### Production Mode
+### AI Game Production Mode
 
-1. **Build Backend**
+1. **Build AI Game Backend**
    ```bash
    cd backend
    npm run build
    npm start
    ```
 
-2. **Build Frontend**
+2. **Build AI Game Frontend**
    ```bash
    cd frontend
    npm run build
@@ -208,38 +194,7 @@ Poker_ai_backend/
 
 ## 📚 API Documentation
 
-### Authentication Endpoints
-
-#### POST `/api/auth/register`
-Register a new user
-```json
-{
-  "username": "string",
-  "email": "string",
-  "password": "string"
-}
-```
-
-#### POST `/api/auth/login`
-Login user
-```json
-{
-  "email": "string",
-  "password": "string"
-}
-```
-
-### Game Endpoints
-
-#### POST `/api/game/create`
-Create a new multiplayer game
-```json
-{
-  "gameType": "multiplayer",
-  "maxPlayers": 6,
-  "buyIn": 1000
-}
-```
+### AI Game Endpoints
 
 #### POST `/api/ai-game/create`
 Create a new AI game
@@ -260,16 +215,7 @@ Make a move in AI game
 }
 ```
 
-### Socket.IO Events
-
-#### Multiplayer Namespace (`/multiplayer`)
-- `connect` - User connects
-- `disconnect` - User disconnects
-- `join-game` - Join a game room
-- `leave-game` - Leave a game room
-- `make-move` - Make a game move
-- `users:update` - Online users list
-- `games:list` - Available games list
+### AI Game Socket.IO Events
 
 #### AI Namespace (`/ai`)
 - `connect` - Connect to AI game
@@ -280,59 +226,9 @@ Make a move in AI game
 
 ## 📁 File Structure & Documentation
 
-### Backend Files
+### Backend AI Files
 
-#### Core Server Files
-
-**`server.ts`** - Main server entry point
-- Express server configuration
-- Socket.IO setup with namespaces
-- Middleware configuration
-- Route mounting
-- Error handling
-
-**`config/database.ts`** - Database configuration
-- MongoDB connection setup
-- Connection options
-- Error handling and reconnection logic
-
-#### Models
-
-**`models/User.ts`** - User data model
-- User schema with validation
-- Password hashing middleware
-- Authentication methods
-- Profile and statistics fields
-
-**`models/Game.ts`** - Game data model
-- Game state schema
-- Player information
-- Game actions and history
-- Hand and betting round data
-
-#### Middleware
-
-**`middleware/auth.ts`** - Authentication middleware
-- JWT token verification
-- User authentication
-- Protected route access
-
-**`middleware/validation.ts`** - Input validation
-- Request validation using Joi
-- Error handling for invalid inputs
-- Sanitization of user inputs
-
-#### Routes
-
-**`routes/auth.ts`** - Authentication routes
-- User registration and login
-- Password reset functionality
-- Profile management
-
-**`routes/game.ts`** - Multiplayer game routes
-- Game creation and joining
-- Game state management
-- Player management
+#### AI Game Routes
 
 **`routes/ai.ts`** - AI game routes
 - AI game creation
@@ -344,249 +240,115 @@ Make a move in AI game
 - Move validation
 - AI decision making
 
-#### Services
+#### AI Services
 
-**`services/GameEngine.ts`** - Core game logic
-- Poker rules implementation
-- Hand evaluation
-- Betting round management
-- Game state transitions
-- Winner determination
-
-**`services/MultiplayerGameEngine.ts`** - Multiplayer game logic
-- Multi-player game management
-- Turn-based gameplay
-- Real-time synchronization
-- Game room management
+**`services/GameEngine.ts`** - Core AI game logic
+- Poker rules implementation for AI games
+- Hand evaluation and AI decision making
+- Betting round management with AI opponents
+- Game state transitions and winner determination
 
 **`services/pokerAI.ts`** - AI decision making
 - Hand strength evaluation
-- Betting strategy
-- Bluffing algorithms
-- Risk assessment
+- Betting strategy algorithms
+- Bluffing and counter-bluffing
+- Risk assessment and position play
 
 **`services/cfrAgent.ts`** - CFR algorithm implementation
 - Counterfactual regret minimization
-- Strategy learning
+- Strategy learning through self-play
 - Nash equilibrium approximation
-- Game tree traversal
+- Game tree traversal and optimization
 
-**`services/opponentModel.ts`** - Opponent modeling
-- Player behavior analysis
-- Tendency detection
+**`services/opponentModel.ts`** - AI opponent modeling
+- Human player behavior analysis
+- Tendency detection and pattern recognition
 - Adaptive strategy adjustment
-- Pattern recognition
+- Bluffing frequency analysis
 
 **`services/AIManager.ts`** - AI coordination
 - Multiple AI opponent management
-- Difficulty level handling
-- AI decision coordination
+- Difficulty level handling (Beginner, Skilled, Expert)
+- AI decision coordination and timing
 - Performance optimization
 
-#### Sockets
+#### AI Game Sockets
 
 **`sockets/gameSockets.ts`** - AI game socket handling
-- AI game connections
-- Move processing
-- Game state broadcasting
-- AI opponent management
+- AI game connections and management
+- Human player move processing
+- AI move broadcasting and notifications
+- Real-time AI opponent management
 
-**`sockets/multiplayerSockets.ts`** - Multiplayer socket handling
-- Player connections
-- Game room management
-- Real-time updates
-- Player list management
+#### AI Game Utils
 
-#### Utils
+**`utils/cards.ts`** - Card utilities for AI games
+- Card representation and deck management
+- Card comparison for AI decision making
+- Hand formatting and display
 
-**`utils/cards.ts`** - Card utilities
-- Card representation
-- Deck management
-- Card comparison
-- Hand formatting
+**`utils/handEvaluator.ts`** - AI hand evaluation
+- Poker hand ranking algorithms
+- Hand strength calculation for AI
+- Hand comparison and winning determination
+- Pot odds and expected value calculations
 
-**`utils/handEvaluator.ts`** - Hand evaluation
-- Poker hand ranking
-- Hand strength calculation
-- Hand comparison
-- Winning hand determination
+#### AI Game Types
 
-#### Types
+**`types/index.ts`** - AI game type definitions
+- AI game state interfaces
+- AI player interfaces and actions
+- AI decision types and events
 
-**`types/index.ts`** - Main type definitions
-- Game state interfaces
-- Player interfaces
-- Action types
-- Socket event types
+**`types/game.types.ts`** - AI game-specific types
+- AI game state types
+- AI action definitions and results
+- AI opponent behavior types
 
-**`types/game.types.ts`** - Game-specific types
-- Game state types
-- Action definitions
-- Result types
-- Event types
+### Frontend Files (AI-Focused)
 
-### Frontend Files
+#### Main AI Components
 
-#### Core Application Files
+**`components/PokerGame.tsx`** - Main AI game interface
+- AI vs Human game table rendering
+- Player cards display with AI opponents
+- Community cards and pot display
+- Action buttons for human player
+- Real-time game state visualization
+- AI move notifications and game progression
 
-**`main.tsx`** - Application entry point
-- React app initialization
-- Router setup
-- Global providers
-
-**`App.tsx`** - Main application component
-- Route definitions
-- Global layout
-- Navigation setup
-
-#### Components
-
-**`components/LandingPage.tsx`** - Landing page
-- Welcome screen
-- Game mode selection
-- User authentication prompts
-
-**`components/GameSelection.tsx`** - Game mode selection
-- AI vs Multiplayer choice
-- Game configuration
-- Player setup
-
-**`components/PokerGame.tsx`** - Main game interface
-- Game table rendering
-- Player cards display
-- Community cards
-- Action buttons
-- Game state visualization
-
-**`components/PokerLobby.tsx`** - Multiplayer lobby
-- Online players list
-- Available games
-- Game creation and joining
-- Real-time updates
-
-**`components/AIGameSetup.tsx`** - AI game setup
-- AI difficulty selection
+**`components/AIGameSetup.tsx`** - AI game configuration
+- AI difficulty selection (Beginner, Skilled, Expert)
 - Buy-in configuration
-- Game initialization
+- AI opponent setup and initialization
+- Game parameters configuration
 
-**`components/SignIn.tsx`** - User authentication
-- Login form
-- Input validation
-- Authentication handling
+#### AI Game Context
 
-**`components/SignUp.tsx`** - User registration
-- Registration form
-- Validation
-- Account creation
+**`contexts/AIGameContext.tsx`** - AI game state management
+- AI game state management and synchronization
+- Human player actions and AI responses
+- Game progression and turn management
+- AI opponent behavior and decision tracking
+- Real-time game state updates
 
-**`components/Profile.tsx`** - User profile
-- User statistics
-- Game history
-- Profile management
+#### AI Game Configuration
 
-**`components/Stats.tsx`** - Game statistics
-- Performance metrics
-- Win/loss records
-- Hand analysis
+**`config/index.ts`** - AI game configuration
+- AI game API endpoints
+- Socket.IO settings for AI games
+- AI difficulty configurations
+- Game parameters and settings
 
-**`components/WaitingRoom.tsx`** - Game waiting room
-- Player waiting area
-- Game preparation
-- Ready state management
+#### AI Game Styling
 
-**`components/Navigation.tsx`** - Navigation bar
-- Menu items
-- User authentication status
-- Navigation links
-
-**`components/RequireAuth.tsx`** - Authentication guard
-- Protected route wrapper
-- Authentication checking
-- Redirect handling
-
-**`components/Loading.tsx`** - Loading component
-- Loading states
-- Spinner animations
-- Progress indicators
-
-#### Contexts
-
-**`contexts/AuthContext.tsx`** - Authentication context
-- User authentication state
-- Login/logout functions
-- Token management
-- User profile data
-
-**`contexts/SocketContext.tsx`** - Socket.IO context
-- Socket connection management
-- Real-time event handling
-- Multiplayer game state
-- Connection status
-
-**`contexts/AIGameContext.tsx`** - AI game context
-- AI game state management
-- Game actions
-- AI opponent handling
-- Game progression
-
-#### Configuration
-
-**`config/index.ts`** - Application configuration
-- API endpoints
-- Socket.IO settings
-- Environment variables
-- Feature flags
-
-#### Utils
-
-**`utils/apiTest.ts`** - API testing utilities
-- API endpoint testing
-- Mock data generation
-- Test helpers
-
-**`api.ts`** - API client
-- HTTP request handling
-- Authentication headers
-- Error handling
-- Response processing
-
-#### Styling
-
-**`components/PokerGame.css`** - Game interface styling
-- Poker table design
-- Card animations
-- Player positioning
-- Responsive layout
-
-**`components/PokerLobby.css`** - Lobby styling
-- Player list design
-- Game room cards
-- Interactive elements
-
-**`components/AIGameSetup.css`** - AI setup styling
-- Configuration forms
-- Difficulty selection
-- Setup interface
-
-**`components/Profile.css`** - Profile styling
-- User profile layout
-- Statistics display
-- Profile management
-
-**`components/Stats.css`** - Statistics styling
-- Data visualization
-- Charts and graphs
-- Performance metrics
-
-**`components/WaitingRoom.css`** - Waiting room styling
-- Waiting interface
-- Player status
-- Game preparation
-
-**`components/GameSelection.css`** - Game selection styling
-- Mode selection interface
-- Configuration options
-- Selection animations
+**`components/PokerGame.css`** - AI game interface styling
+- Professional poker table design with glass-morphism effects
+- AI player positioning around the table
+- Community cards area between AI players and human player
+- Card animations and transitions
+- Responsive layout for different screen sizes
+- Modern casino-style aesthetics with gradients and shadows
 
 ## 🤖 AI Algorithms
 
@@ -626,36 +388,31 @@ Make a move in AI game
   - Opponent fold equity
   - Bluff sizing optimization
 
-## 🎮 Game Features
+## 🎮 AI Game Features
 
-### Poker Rules Implementation
-- **Texas Hold'em**: Complete rule implementation
-- **Betting Rounds**: Preflop, flop, turn, river
-- **Hand Rankings**: All standard poker hands
-- **Position Play**: Dealer, small blind, big blind
-- **Side Pots**: Multiple player all-in scenarios
+### AI vs Human Poker
+- **Complete Texas Hold'em**: Full poker rule implementation
+- **AI Opponents**: Multiple difficulty levels (Beginner, Skilled, Expert)
+- **Real-time Gameplay**: Live AI decision making and responses
+- **Advanced AI**: CFR algorithm with opponent modeling
+- **Professional Interface**: Casino-quality poker table design
 
-### Real-time Features
-- **Live Updates**: Real-time game state synchronization
-- **Player Actions**: Instant move broadcasting
-- **Chat System**: Player communication
-- **Spectator Mode**: Watch ongoing games
+### AI Game Mechanics
+- **Betting Rounds**: Preflop, flop, turn, river with AI decision making
+- **Hand Evaluation**: AI hand strength assessment and betting strategy
+- **Bluffing**: Intelligent AI bluffing and counter-bluffing
+- **Position Play**: AI considers dealer, small blind, big blind positions
+- **Adaptive Strategy**: AI learns and adapts to human player behavior
 
-### Game Statistics
-- **Hand History**: Complete game records
-- **Performance Metrics**: Win rate, profit/loss
-- **Player Analysis**: Tendency tracking
-- **Session Statistics**: Current session performance
-
-## 🚀 Getting Started
+## 🚀 Getting Started with AI Game
 
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd Poker_ai_backend
+   cd ai_poker_agent
    ```
 
-2. **Set up the backend**
+2. **Set up the AI game backend**
    ```bash
    cd backend
    npm install
@@ -664,16 +421,16 @@ Make a move in AI game
    npm run dev
    ```
 
-3. **Set up the frontend**
+3. **Set up the AI game frontend**
    ```bash
    cd frontend
    npm install
    npm run dev
    ```
 
-4. **Access the application**
-   - Frontend: `http://localhost:3000`
-   - Backend API: `http://localhost:5000`
+4. **Access the AI game application**
+   - AI Game Frontend: `http://localhost:3000`
+   - AI Game Backend API: `http://localhost:5000`
 
 ## 🤝 Contributing
 
@@ -689,11 +446,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- Poker strategy algorithms based on academic research
-- UI/UX design inspired by modern casino applications
-- Real-time communication powered by Socket.IO
-- AI algorithms implemented using CFR and opponent modeling techniques
+- **CFR Algorithm**: Counterfactual Regret Minimization based on academic research
+- **AI Poker Strategy**: Advanced poker AI algorithms and opponent modeling
+- **Professional UI**: Casino-quality poker table design and animations
+- **Real-time AI**: Socket.IO powered AI game communication
+- **Modern Tech Stack**: React, TypeScript, and Node.js for robust AI game development
 
 ---
 
-**Happy Playing! 🃏🎉**
+**Happy AI Poker Playing! 🃏🤖🎉**
