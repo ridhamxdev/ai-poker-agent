@@ -39,24 +39,29 @@ export class PokerAI {
   private configureDifficultySettings(): void {
     switch (this.difficulty) {
       case 'easy':
-        this.maxBetAmount = 300; // Conservative betting
+        this.maxBetAmount = 300; // Conservative betting - matches frontend
         this.personality = 'defensive';
+        console.log(`🤖 AI Difficulty: EASY - Max bet: $${this.maxBetAmount}, Personality: ${this.personality}`);
         break;
       case 'medium':
-        this.maxBetAmount = 600; // Moderate betting
+        this.maxBetAmount = 600; // Moderate betting - matches frontend
         this.personality = 'balanced';
+        console.log(`🤖 AI Difficulty: MEDIUM - Max bet: $${this.maxBetAmount}, Personality: ${this.personality}`);
         break;
       case 'hard':
-        this.maxBetAmount = 900; // Aggressive betting
+        this.maxBetAmount = 900; // Aggressive betting - matches frontend
         this.personality = 'aggressive';
+        console.log(`🤖 AI Difficulty: HARD - Max bet: $${this.maxBetAmount}, Personality: ${this.personality}`);
         break;
       case 'expert':
         this.maxBetAmount = 1200; // Expert level betting
         this.personality = 'exploitative';
+        console.log(`🤖 AI Difficulty: EXPERT - Max bet: $${this.maxBetAmount}, Personality: ${this.personality}`);
         break;
       default:
         this.maxBetAmount = 600;
         this.personality = 'balanced';
+        console.log(`🤖 AI Difficulty: DEFAULT - Max bet: $${this.maxBetAmount}, Personality: ${this.personality}`);
     }
   }
 
@@ -69,11 +74,17 @@ export class PokerAI {
       throw new Error('Invalid AI player');
     }
 
+    console.log(`\n🤖 AI DECISION PROCESS - Difficulty: ${this.difficulty.toUpperCase()}`);
+    console.log(`📊 Game State: ${gameState.gameState}, Pot: $${gameState.pot}, Current Bet: $${gameState.currentBet}`);
+    console.log(`🃏 AI Cards: ${player.cards.map(c => `${c.rank}${c.suit}`).join(', ')}`);
+    console.log(`🌍 Community Cards: ${gameState.communityCards.map(c => `${c.rank}${c.suit}`).join(', ')}`);
+
     // Update session state
     this.sessionState.handsPlayed++;
     this.updatePersonality();
 
     const validActions = this.getValidActions(gameState);
+    console.log(`✅ Valid Actions: ${validActions.join(', ')}`);
     
     // Use CFR strategy for decision making
     const decision = this.cfrAgent.getDecision(
@@ -83,18 +94,30 @@ export class PokerAI {
       this.getPlayerPosition(gameState, player),
       validActions
     );
+    console.log(`🧠 CFR Decision: ${decision.action} (${(decision.probability * 100).toFixed(1)}% confidence) - ${decision.reasoning}`);
 
     // Apply multi-layered decision enhancements
     let enhancedDecision = this.applyDifficultyAdjustments(decision, gameState, player);
+    console.log(`⚙️ After Difficulty Adjustments: ${enhancedDecision.action} - ${enhancedDecision.reasoning}`);
+    
     enhancedDecision = this.applyOpponentModeling(enhancedDecision, gameState, player);
+    console.log(`👥 After Opponent Modeling: ${enhancedDecision.action} - ${enhancedDecision.reasoning}`);
+    
     enhancedDecision = this.applyPersonalityEffects(enhancedDecision, gameState, player);
+    console.log(`🎭 After Personality Effects: ${enhancedDecision.action} - ${enhancedDecision.reasoning}`);
+    
     enhancedDecision = this.applyRiskManagement(enhancedDecision, gameState, player);
+    console.log(`⚠️ After Risk Management: ${enhancedDecision.action} - ${enhancedDecision.reasoning}`);
     
     // Final bluffing strategy with opponent awareness
     let finalDecision = this.addAdvancedBluffingStrategy(enhancedDecision, gameState, player);
+    console.log(`🎯 After Bluffing Strategy: ${finalDecision.action} - ${finalDecision.reasoning}`);
 
     // Apply betting limits based on difficulty
     finalDecision = this.applyBettingLimits(finalDecision, gameState, player);
+    console.log(`💰 Final Decision: ${finalDecision.action}${finalDecision.amount ? ` $${finalDecision.amount}` : ''} - ${finalDecision.reasoning}`);
+    console.log(`🎲 Is Bluff: ${finalDecision.isBluff ? 'YES' : 'NO'}`);
+    console.log(`📈 Confidence: ${(finalDecision.probability * 100).toFixed(1)}%\n`);
 
     return finalDecision;
   }
@@ -131,14 +154,30 @@ export class PokerAI {
   private updatePersonality(): void {
     // Change personality based on recent performance and hands played
     const recentLosses = this.sessionState.recentResults.slice(-5).filter(r => r === 'lost').length;
+    const recentWins = this.sessionState.recentResults.slice(-5).filter(r => r === 'won').length;
     
     if (recentLosses >= 3) {
       this.personality = 'defensive';
       this.sessionState.tiltFactor = Math.min(this.sessionState.tiltFactor + 0.1, 0.5);
+    } else if (recentWins >= 3) {
+      this.personality = 'aggressive';
+      this.sessionState.tiltFactor = Math.max(this.sessionState.tiltFactor - 0.05, 0);
     } else if (this.sessionState.handsPlayed > 0 && this.sessionState.handsPlayed % 50 === 0) {
-      // Periodically randomize personality for unpredictability
-      const personalities: typeof this.personality[] = ['balanced', 'aggressive', 'defensive', 'exploitative'];
-      this.personality = personalities[Math.floor(Math.random() * personalities.length)];
+      // Periodically adapt personality based on opponent style
+      const opponentStyle = this.opponentModel.estimateStyle();
+      switch (opponentStyle) {
+        case 'tight':
+          this.personality = 'aggressive'; // Exploit tight players
+          break;
+        case 'loose':
+          this.personality = 'defensive'; // Play tighter against loose players
+          break;
+        case 'aggressive':
+          this.personality = 'exploitative'; // Counter aggressive play
+          break;
+        default:
+          this.personality = 'balanced';
+      }
     }
   }
 
@@ -146,28 +185,37 @@ export class PokerAI {
     const opponentStyle = this.opponentModel.estimateStyle();
     const currentBet = this.getCallAmount(gameState);
     const potSize = gameState.pot;
+    const handStrength = this.evaluateHandStrength(player.cards, gameState.communityCards);
     
     // Adjust decision based on opponent's style
     switch (opponentStyle) {
       case 'tight':
         // Against tight players, bluff more and value bet thinner
-        if (decision.action === 'call' && Math.random() < 0.3) {
-          return { ...decision, action: 'raise', reasoning: 'Exploiting tight opponent' };
+        if (decision.action === 'call' && handStrength > 0.3) {
+          return { ...decision, action: 'raise', reasoning: 'Exploiting tight opponent with value bet' };
+        }
+        if (handStrength < 0.2 && decision.action === 'raise') {
+          return { ...decision, action: 'call', reasoning: 'Avoiding weak bluffs against tight opponent' };
         }
         break;
         
       case 'loose':
         // Against loose players, value bet wider and bluff less
-        if (decision.action === 'raise' && this.evaluateHandStrength(player.cards, gameState.communityCards) < 0.4) {
+        if (decision.action === 'raise' && handStrength < 0.4) {
           return { ...decision, action: 'call', reasoning: 'Avoiding bluff against loose opponent' };
+        }
+        if (handStrength > 0.6 && decision.action === 'call') {
+          return { ...decision, action: 'raise', reasoning: 'Value betting against loose opponent' };
         }
         break;
         
       case 'aggressive':
         // Against aggressive players, trap more with strong hands
-        const handStrength = this.evaluateHandStrength(player.cards, gameState.communityCards);
-        if (handStrength > 0.8 && decision.action === 'raise' && Math.random() < 0.4) {
-          return { ...decision, action: 'call', reasoning: 'Trapping aggressive opponent' };
+        if (handStrength > 0.8 && decision.action === 'raise') {
+          return { ...decision, action: 'call', reasoning: 'Trapping aggressive opponent with strong hand' };
+        }
+        if (handStrength < 0.3 && decision.action === 'call') {
+          return { ...decision, action: 'fold', reasoning: 'Avoiding weak calls against aggressive opponent' };
         }
         break;
     }
@@ -195,9 +243,9 @@ export class PokerAI {
     
     switch (this.personality) {
       case 'aggressive':
-        // More likely to bet and raise
-        if (decision.action === 'call' && handStrength > 0.4 && Math.random() < 0.4) {
-          return { ...decision, action: 'raise', reasoning: 'Aggressive personality override' };
+        // More likely to bet and raise with decent hands
+        if (decision.action === 'call' && handStrength > 0.5) {
+          return { ...decision, action: 'raise', reasoning: 'Aggressive personality: value betting' };
         }
         break;
         
@@ -206,24 +254,32 @@ export class PokerAI {
         if (decision.isBluff) {
           return { ...decision, action: 'call', isBluff: false, reasoning: 'Defensive personality avoiding bluff' };
         }
+        if (handStrength < 0.4 && decision.action === 'raise') {
+          return { ...decision, action: 'call', reasoning: 'Defensive personality: avoiding weak raises' };
+        }
         break;
         
       case 'exploitative':
         // Focus on exploiting opponent weaknesses
         const opponentStyle = this.opponentModel.estimateStyle();
-        if (opponentStyle === 'tight' && handStrength < 0.3 && Math.random() < 0.5) {
-          return { ...decision, action: 'raise', isBluff: true, reasoning: 'Exploitative bluff' };
+        if (opponentStyle === 'tight' && handStrength < 0.3 && handStrength > 0.1) {
+          return { ...decision, action: 'raise', isBluff: true, reasoning: 'Exploitative bluff against tight opponent' };
         }
         break;
     }
 
-    // Apply tilt factor
+    // Apply tilt factor - more strategic than random
     if (this.sessionState.tiltFactor > 0) {
-      if (Math.random() < this.sessionState.tiltFactor) {
-        // Tilted behavior - more aggressive or passive randomly
-        const randomActions: ActionType[] = ['raise', 'fold'];
-        const randomAction = randomActions[Math.floor(Math.random() * randomActions.length)];
-        return { ...decision, action: randomAction, reasoning: 'Tilt-influenced decision' };
+      if (this.sessionState.tiltFactor > 0.3) {
+        // High tilt - more aggressive
+        if (decision.action === 'call' && handStrength > 0.3) {
+          return { ...decision, action: 'raise', reasoning: 'Tilt-influenced aggressive play' };
+        }
+      } else if (this.sessionState.tiltFactor > 0.1) {
+        // Low tilt - more conservative
+        if (decision.action === 'raise' && handStrength < 0.5) {
+          return { ...decision, action: 'call', reasoning: 'Tilt-influenced conservative play' };
+        }
       }
     }
 
@@ -241,14 +297,20 @@ export class PokerAI {
       return { ...decision, action: 'fold', reasoning: 'Risk management: high chip risk with weak hand' };
     }
 
-    // Pot odds consideration
-    if (decision.action === 'call' && potOdds > handStrength + handPotential && Math.random() < 0.7) {
+    // Pot odds consideration - strategic rather than random
+    if (decision.action === 'call' && potOdds > handStrength + handPotential + 0.2) {
       return { ...decision, action: 'fold', reasoning: 'Risk management: poor pot odds' };
     }
 
     // Bankroll preservation
     if (player.chips < gameState.bigBlind * 10 && decision.action === 'raise') {
       return { ...decision, action: 'call', reasoning: 'Risk management: short stack preservation' };
+    }
+
+    // Position-based risk management
+    const position = this.getPlayerPosition(gameState, player);
+    if (position === 'early' && decision.action === 'raise' && handStrength < 0.5) {
+      return { ...decision, action: 'call', reasoning: 'Risk management: early position with weak hand' };
     }
 
     return decision;
@@ -306,7 +368,11 @@ export class PokerAI {
     const optimalBluffFreq = this.calculateOptimalBluffFrequency(gameState, player);
     const bluffChance = Math.max(optimalBluffFreq - opponentBluffDetection * 0.5, 0.05);
 
-    if (Math.random() < bluffChance && decision.action !== 'fold' && handStrength < 0.4) {
+    // Strategic bluffing based on position and board texture
+    const position = this.getPlayerPosition(gameState, player);
+    const shouldBluff = this.shouldAttemptBluff(handStrength, position, gameState, optimalBluffFreq);
+
+    if (shouldBluff && decision.action !== 'fold' && handStrength < 0.4) {
       // Calculate optimal bluff size based on fold probability
       const foldProb = this.opponentModel.predictFoldProbability(
         gameState.pot,
@@ -321,11 +387,54 @@ export class PokerAI {
         action: 'raise',
         amount: bluffSize,
         isBluff: true,
-        reasoning: `Advanced bluff (${(bluffChance * 100).toFixed(1)}% frequency, ${(foldProb * 100).toFixed(1)}% fold expectation)`
+        reasoning: `Strategic bluff (${(bluffChance * 100).toFixed(1)}% frequency, ${(foldProb * 100).toFixed(1)}% fold expectation)`
       };
     }
 
     return { ...decision, isBluff: false };
+  }
+
+  private shouldAttemptBluff(handStrength: number, position: string, gameState: IGame, bluffFreq: number): boolean {
+    // Strategic bluffing conditions
+    if (handStrength > 0.4) return false; // Don't bluff with decent hands
+    
+    // Position-based bluffing
+    if (position === 'early' && handStrength < 0.1) return true; // Only bluff very weak hands early
+    if (position === 'late' && handStrength < 0.3) return true; // Can bluff more hands late
+    
+    // Board texture considerations
+    const communityCards = gameState.communityCards;
+    if (communityCards.length >= 3) {
+      // Check if board is favorable for bluffing (no obvious draws, etc.)
+      const boardStrength = this.evaluateBoardTexture(communityCards);
+      if (boardStrength < 0.3 && handStrength < 0.2) return true;
+    }
+    
+    return false;
+  }
+
+  private evaluateBoardTexture(communityCards: any[]): number {
+    if (communityCards.length < 3) return 0.5;
+    
+    // Simple board texture evaluation
+    const suits = communityCards.map(c => c.suit);
+    const ranks = communityCards.map(c => this.getCardValue(c.rank));
+    
+    // Check for flush draws
+    const suitCounts = suits.reduce((acc, suit) => {
+      acc[suit] = (acc[suit] || 0) + 1;
+      return acc;
+    }, {} as {[key: string]: number});
+    
+    const maxSuitCount = Math.max(...Object.values(suitCounts).map(count => Number(count)));
+    if (maxSuitCount >= 3) return 0.8; // High board strength
+    
+    // Check for straight draws
+    const sortedRanks = ranks.sort((a, b) => a - b);
+    const uniqueRanks = [...new Set(sortedRanks)];
+    if (uniqueRanks.length >= 4) return 0.7; // Medium-high board strength
+    
+    return 0.3; // Low board strength - good for bluffing
   }
 
   private calculateOptimalBluffFrequency(gameState: IGame, player: any): number {
@@ -461,28 +570,58 @@ export class PokerAI {
   }
 
   private easyAdjustments(decision: AIDecision, handStrength: number): AIDecision {
-    if (handStrength < 0.3 && decision.action === 'raise') {
-      return { ...decision, action: 'call' };
+    // EASY: Conservative play - avoid risky moves, play tight
+    if (handStrength < 0.4 && decision.action === 'raise') {
+      return { ...decision, action: 'call', reasoning: 'Easy: Avoiding risky raises with weak hands' };
+    }
+    if (handStrength < 0.2 && decision.action === 'call') {
+      return { ...decision, action: 'fold', reasoning: 'Easy: Folding very weak hands' };
     }
     if (handStrength > 0.8 && decision.action === 'fold') {
-      return { ...decision, action: 'call' };
+      return { ...decision, action: 'call', reasoning: 'Easy: Playing strong hands conservatively' };
+    }
+    // Easy AI rarely bluffs
+    if (decision.isBluff) {
+      return { ...decision, action: 'call', isBluff: false, reasoning: 'Easy: Avoiding bluffs' };
     }
     return decision;
   }
 
   private mediumAdjustments(decision: AIDecision, handStrength: number): AIDecision {
-    const randomFactor = Math.random();
-    if (randomFactor < 0.1) {
-      const actions: ActionType[] = ['fold', 'call', 'raise'];
-      const randomAction = actions[Math.floor(Math.random() * actions.length)];
-      return { ...decision, action: randomAction };
+    // MEDIUM: Balanced strategy - moderate aggression, some bluffing
+    if (handStrength < 0.25 && decision.action === 'raise') {
+      return { ...decision, action: 'call', reasoning: 'Medium: Avoiding weak raises' };
+    }
+    if (handStrength > 0.75 && decision.action === 'call') {
+      return { ...decision, action: 'raise', reasoning: 'Medium: Value betting strong hands' };
+    }
+    if (handStrength < 0.15 && decision.action === 'call') {
+      return { ...decision, action: 'fold', reasoning: 'Medium: Folding very weak hands' };
+    }
+    // Medium AI can bluff occasionally
+    if (decision.isBluff && handStrength < 0.1) {
+      return { ...decision, action: 'call', isBluff: false, reasoning: 'Medium: Avoiding weak bluffs' };
     }
     return decision;
   }
 
   private hardAdjustments(decision: AIDecision, handStrength: number): AIDecision {
-    if (handStrength > 0.6 && Math.random() < 0.2) {
-      return { ...decision, action: 'raise' };
+    // HARD: Aggressive play - more bluffing, aggressive value betting
+    if (handStrength > 0.5 && decision.action === 'call') {
+      return { ...decision, action: 'raise', reasoning: 'Hard: Aggressive value betting' };
+    }
+    if (handStrength > 0.7 && decision.action === 'raise') {
+      return { ...decision, action: 'raise', amount: (decision.amount || 0) * 1.2, reasoning: 'Hard: Aggressive sizing with strong hands' };
+    }
+    if (handStrength < 0.25 && decision.action === 'raise') {
+      return { ...decision, action: 'fold', reasoning: 'Hard: Avoiding weak raises' };
+    }
+    if (handStrength < 0.1 && decision.action === 'call') {
+      return { ...decision, action: 'fold', reasoning: 'Hard: Folding very weak hands' };
+    }
+    // Hard AI can bluff more frequently
+    if (decision.isBluff && handStrength < 0.05) {
+      return { ...decision, action: 'call', isBluff: false, reasoning: 'Hard: Avoiding extremely weak bluffs' };
     }
     return decision;
   }

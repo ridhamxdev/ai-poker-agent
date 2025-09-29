@@ -57,6 +57,15 @@ export default (io: Server): void => {
     authenticatedSocket.on('createGame', async (data: CreateGameData) => {
       try {
         const { gameType, aiDifficulty } = data;
+        
+        // Validate difficulty level
+        const validDifficulties = ['easy', 'medium', 'hard', 'expert'];
+        if (!validDifficulties.includes(aiDifficulty)) {
+          throw new Error(`Invalid difficulty level: ${aiDifficulty}. Must be one of: ${validDifficulties.join(', ')}`);
+        }
+        
+        console.log(`\n🎮 CREATING AI GAME - Difficulty: ${aiDifficulty.toUpperCase()}, Type: ${gameType}`);
+        
         const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         
         const gameEngine = new GameEngine(gameId);
@@ -80,9 +89,11 @@ export default (io: Server): void => {
         const game = await gameEngine.initializeGame(players, gameType);
         activeGames.set(gameId, gameEngine);
         
-        // Create AI instance for this game
+        // Create AI instance for this game with validated difficulty
         const ai = new PokerAI(aiDifficulty);
         aiInstances.set(gameId, ai);
+        
+        console.log(`✅ AI Game Created - Game ID: ${gameId}, AI Difficulty: ${aiDifficulty.toUpperCase()}`);
         
         authenticatedSocket.join(gameId);
         authenticatedSocket.gameId = gameId;
@@ -334,16 +345,31 @@ export default (io: Server): void => {
       const gameEngine = activeGames.get(gameId);
       const ai = aiInstances.get(gameId);
       
-      if (!gameEngine || !ai) return;
+      if (!gameEngine || !ai) {
+        console.log(`❌ AI Move Failed: Game engine or AI instance not found for game ${gameId}`);
+        return;
+      }
 
       const currentGame = await gameEngine.getGameState(gameId);
-      if (!currentGame || currentGame.gameState === 'finished') return;
+      if (!currentGame || currentGame.gameState === 'finished') {
+        console.log(`❌ AI Move Failed: Game not found or finished for game ${gameId}`);
+        return;
+      }
 
       const currentPlayer = currentGame.players[currentGame.currentPlayer];
-      if (!currentPlayer.isAI) return;
+      if (!currentPlayer.isAI) {
+        console.log(`❌ AI Move Failed: Current player is not AI for game ${gameId}`);
+        return;
+      }
+
+      console.log(`\n🎮 AI MOVE INITIATED - Game: ${gameId}, Player: ${currentPlayer.username}`);
+      console.log(`📊 Current Game State: ${currentGame.gameState}, Pot: $${currentGame.pot}`);
 
       // Get AI decision
       const decision = await ai.makeDecision(currentGame, currentPlayer.username);
+      
+      console.log(`🎯 AI DECISION MADE: ${decision.action}${decision.amount ? ` $${decision.amount}` : ''}`);
+      console.log(`💭 AI Reasoning: ${decision.reasoning}`);
       
       // Execute AI move
       const updatedGame = await gameEngine.makeAction(
@@ -352,6 +378,8 @@ export default (io: Server): void => {
         decision.action,
         decision.amount || 0
       );
+
+      console.log(`✅ AI MOVE EXECUTED: ${decision.action}${decision.amount ? ` $${decision.amount}` : ''} - Game updated`);
 
       // Broadcast AI move
       const gameState = {
