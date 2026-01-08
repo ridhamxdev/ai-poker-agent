@@ -24,7 +24,7 @@ interface AIPlayer {
   allIn: boolean;
   isAI: boolean;
   aiId?: string;
-  position?: 'bottom' | 'left' | 'top' | 'right' | 'dealer' | 'smallBlind' | 'bigBlind' | 'none';
+  position?: 'bottom' | 'left' | 'top' | 'right' | 'top-left' | 'top-right' | 'dealer' | 'smallBlind' | 'bigBlind' | 'none';
   socketId?: string;
 }
 
@@ -36,11 +36,8 @@ const PokerGame = () => {
   const [playerAction, setPlayerAction] = useState<string>('');
   const [gameMode, setGameMode] = useState<'multiplayer' | 'ai' | null>(null);
   const [showGameNotification, setShowGameNotification] = useState(false);
-  const [gameNotification, setGameNotification] = useState<{
-    type: 'start' | 'winner' | 'loser' | 'finish';
-    message: string;
-    details?: string;
-  } | null>(null);
+  const [gameNotification, setGameNotification] = useState<{ type: string, message: string, details?: string } | null>(null);
+
   const [showWinnerNotification, setShowWinnerNotification] = useState(false);
 
   // Check if this is an AI game from route state
@@ -115,6 +112,8 @@ const PokerGame = () => {
     if (!user) return;
 
     setPlayerAction(action);
+    // Auto-dismiss the action feedback after 3 seconds
+    setTimeout(() => setPlayerAction(''), 3000);
 
     if (gameMode === 'ai') {
       // Handle AI game action using the AI context
@@ -136,25 +135,46 @@ const PokerGame = () => {
   const getPlayerPositions = (players: AIPlayer[]): AIPlayer[] => {
     // Find current player's index
     const currentPlayerIndex = players.findIndex(p => p.id === user?.id);
-    if (currentPlayerIndex === -1) return players;
+    if (currentPlayerIndex === -1 && players.length > 0) return players;
 
-    // Assign positions relative to the current player
+    const count = players.length;
+
+    // Assign positions relative to the current player (who is always bottom)
     return players.map((player, index) => {
-      const relativePosition = (index - currentPlayerIndex + players.length) % players.length;
-      let position: 'bottom' | 'left' | 'top' | 'right';
+      // Calculate relative index from Hero (0)
+      const relativeIndex = (index - currentPlayerIndex + count) % count;
+      let position: 'bottom' | 'left' | 'top' | 'right' | 'top-left' | 'top-right' = 'bottom';
 
-      switch (relativePosition) {
-        case 0:
-          position = 'bottom';
-          break;
-        case 1:
-          position = 'right';
-          break;
-        case 2:
-          position = 'top';
-          break;
-        default:
-          position = 'left';
+      if (count === 2) {
+        // Heads up: Hero (0), Villain (1 -> Top)
+        position = relativeIndex === 0 ? 'bottom' : 'top';
+      } else if (count === 3) {
+        // 3-max: Hero (0), Left (1), Right (2) -> Standard triangle
+        // Alternatively: Hero (0), Top-Left (1), Top-Right (2)
+        if (relativeIndex === 0) position = 'bottom';
+        else if (relativeIndex === 1) position = 'top-left';
+        else position = 'top-right';
+      } else if (count === 4) {
+        // 4-max: Bottom, Left, Top, Right
+        if (relativeIndex === 0) position = 'bottom';
+        else if (relativeIndex === 1) position = 'left';
+        else if (relativeIndex === 2) position = 'top';
+        else position = 'right';
+      } else if (count === 5) {
+        // 5-max: Bottom, Left, Top-Left, Top-Right, Right
+        if (relativeIndex === 0) position = 'bottom';
+        else if (relativeIndex === 1) position = 'left';
+        else if (relativeIndex === 2) position = 'top-left';
+        else if (relativeIndex === 3) position = 'top-right';
+        else position = 'right';
+      } else {
+        // 6-max (or more): Bottom, Left, Top-Left, Top, Top-Right, Right
+        if (relativeIndex === 0) position = 'bottom';
+        else if (relativeIndex === 1) position = 'left';
+        else if (relativeIndex === 2) position = 'top-left';
+        else if (relativeIndex === 3) position = 'top';
+        else if (relativeIndex === 4) position = 'top-right';
+        else position = 'right'; // Any extras pile here or need more logic
       }
 
       return {
@@ -498,7 +518,7 @@ const PokerGame = () => {
 
         <div className={`players-container players-${(gameState.players || []).length}`}>
           {gameMode === 'ai'
-            ? getPlayerPositions(gameState.players as AIPlayer[] || []).map((player) => renderPlayer(player, player.position as 'bottom' | 'left' | 'top' | 'right'))
+            ? getPlayerPositions(gameState.players as AIPlayer[] || []).map((player) => renderPlayer(player, player.position as any))
             : (gameState.players || []).map((player: any) => (
               <motion.div
                 key={player.id}
@@ -641,13 +661,18 @@ const PokerGame = () => {
 
       {playerAction && (
         <motion.div
-          className="action-feedback"
+          className="action-feedback-pill"
           initial={{ opacity: 0, y: -20, x: '-50%' }}
           animate={{ opacity: 1, y: 0, x: '-50%' }}
           exit={{ opacity: 0, y: -20, x: '-50%' }}
 
         >
-          You {playerAction}ed!
+          {playerAction === 'raise' ? 'You Raised!' :
+            playerAction === 'call' ? 'You Called!' :
+              playerAction === 'fold' ? 'You Folded!' :
+                playerAction === 'check' ? 'You Checked!' :
+                  playerAction === 'all-in' ? 'You went All-In!' :
+                    `You ${playerAction}!`}
         </motion.div>
       )}
 
