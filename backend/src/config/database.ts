@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const connectDB = async (): Promise<void> => {
   try {
     const conn = await mongoose.connect(
-      process.env.MONGO_URI || 'mongodb://localhost:27017/poker-ai',
+      process.env.MONGO_URI || 'mongodb+srv://ridhamdev3:Ridham123%40@cluster0.zbksmdz.mongodb.net/ai-poker',
       {
         // Remove deprecated options for newer mongoose versions
       }

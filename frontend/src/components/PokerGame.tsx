@@ -30,7 +30,7 @@ interface AIPlayer {
 
 const PokerGame = () => {
   const { currentGame, makeAction, leaveGame, error: socketError } = useSocket();
-  const { currentAIGame, makeAIAction, leaveAIGame, isLoading: aiLoading, error: aiError } = useAIGame();
+  const { currentAIGame, makeAIAction, processAITurn, leaveAIGame, isLoading: aiLoading, error: aiError } = useAIGame();
   const { user } = useAuth();
   const location = useLocation();
   const [playerAction, setPlayerAction] = useState<string>('');
@@ -71,24 +71,29 @@ const PokerGame = () => {
 
     // Show game finish notification
     if (gameState.gameState === 'finished' && gameState.winner) {
-      const isWinner = gameState.winner.playerId === user?.id || 
-                      gameState.winner.playerId === user?.username;
-      
-      setGameNotification({
-        type: isWinner ? 'winner' : 'loser',
-        message: isWinner ? 'You Won!' : 'You Lost',
-        details: isWinner 
-          ? `Won $${gameState.winner.amount} with ${gameState.winner.winningHand}`
-          : `${gameState.winner.playerId} won with ${gameState.winner.winningHand}`
-      });
-      setShowGameNotification(true);
-      setTimeout(() => setShowGameNotification(false), 5000);
-      
+
+
       // Show winner notification for 5 seconds then hide
       setShowWinnerNotification(true);
       setTimeout(() => setShowWinnerNotification(false), 5000);
     }
   }, [gameMode, currentAIGame, currentGame, user]);
+
+  // Effect to trigger AI turn processing if needed
+  useEffect(() => {
+    if (gameMode === 'ai' && currentAIGame && currentAIGame.gameState !== 'finished') {
+      const currentPlayer = currentAIGame.players[currentAIGame.currentTurn];
+      // If current player is AI, trigger backend process
+      // We use a timeout to throttle and allow UI update
+      if (currentPlayer && (currentPlayer.isAI || currentPlayer.aiId)) {
+        const timer = setTimeout(() => {
+          console.log('Detected AI turn, ensuring processing...');
+          processAITurn();
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [gameMode, currentAIGame, processAITurn]);
 
   // Don't render anything until we know the game mode
   if (gameMode === null) {
@@ -137,7 +142,7 @@ const PokerGame = () => {
     return players.map((player, index) => {
       const relativePosition = (index - currentPlayerIndex + players.length) % players.length;
       let position: 'bottom' | 'left' | 'top' | 'right';
-      
+
       switch (relativePosition) {
         case 0:
           position = 'bottom';
@@ -220,10 +225,10 @@ const PokerGame = () => {
     }
 
     const card = parseCard(cardData);
-    // Show all cards when game is finished - force reveal for finished games
-    const shouldShowCard = !isHidden || (gameState?.gameState === 'finished');
-    const isReveal = isHidden && gameState?.gameState === 'finished';
-    
+    // Show all cards when game is finished or in showdown
+    const shouldShowCard = !isHidden || (gameState?.gameState === 'finished' || gameState?.gameState === 'showdown');
+    const isReveal = isHidden && (gameState?.gameState === 'finished' || gameState?.gameState === 'showdown');
+
     // Debug logging
     if (gameState?.gameState === 'finished') {
       console.log('Card reveal debug:', {
@@ -235,7 +240,7 @@ const PokerGame = () => {
         card: card
       });
     }
-    
+
     return (
       <motion.div
         className={`playing-card ${!shouldShowCard ? 'hidden' : ''} ${isReveal ? 'reveal' : ''}`}
@@ -264,7 +269,7 @@ const PokerGame = () => {
     const isDealer = player.position === 'dealer';
     const isSmallBlind = player.position === 'smallBlind';
     const isBigBlind = player.position === 'bigBlind';
-    
+
     // Debug AI player data
     if (gameState?.gameState === 'finished') {
       console.log('AI Player data:', {
@@ -275,7 +280,7 @@ const PokerGame = () => {
         gameState: gameState?.gameState
       });
     }
-    
+
     return (
       <motion.div
         key={player.id}
@@ -300,14 +305,14 @@ const PokerGame = () => {
             <div className="all-in-badge">ALL-IN</div>
           )}
         </div>
-        
+
         {/* Position indicators */}
         <div className="position-indicators">
           {isDealer && <div className="dealer-button">D</div>}
           {isSmallBlind && <div className="small-blind">SB</div>}
           {isBigBlind && <div className="big-blind">BB</div>}
         </div>
-        
+
         <div className="player-cards">
           {player.cards && player.cards.length > 0 ? (
             player.cards.map((card, index) => {
@@ -315,10 +320,10 @@ const PokerGame = () => {
               // Check multiple ways to identify AI players
               const isAI = player.isAI || player.aiId || player.username.startsWith('Bot_') || player.username.includes('AI');
               const isHumanPlayer = player.id === user?.id || player.userId === user?.id || player.username === user?.username;
-              
+
               // Force show all cards when game is finished
               const shouldHide = Boolean(gameState?.gameState === 'finished' ? false : (isAI && !isHumanPlayer));
-              
+
               // Debug logging
               if (gameState?.gameState === 'finished') {
                 console.log(`Card for ${player.username}:`, {
@@ -329,7 +334,7 @@ const PokerGame = () => {
                   gameState: gameState?.gameState
                 });
               }
-              
+
               return (
                 <div key={index}>
                   {renderCard(card, shouldHide)}
@@ -352,16 +357,16 @@ const PokerGame = () => {
   const gameState = gameMode === 'ai' ? currentAIGame : currentGame;
   const isLoading = gameMode === 'ai' ? aiLoading : false;
   const gameError = gameMode === 'ai' ? aiError : socketError;
-  
-  const playerIndex = gameState?.players.findIndex(p => 
+
+  const playerIndex = gameState?.players.findIndex(p =>
     gameMode === 'ai' ? p.username === user?.username : (p.id === user?.id || p.userId === user?.id || p.username === user?.username)
   );
-  
+
   // Temporary fix: If currentTurn is out of bounds, assume it's the human player's turn
   const currentTurn = gameState?.currentTurn || 0;
   const validCurrentTurn = currentTurn < (gameState?.players.length || 0) ? currentTurn : 0;
   const isCurrentPlayer = user && gameState && validCurrentTurn === playerIndex;
-  const currentPlayerState = user && gameState?.players.find(p => 
+  const currentPlayerState = user && gameState?.players.find(p =>
     gameMode === 'ai' ? p.username === user.username : (p.id === user.id || p.userId === user.id || p.username === user.username)
   );
 
@@ -406,19 +411,26 @@ const PokerGame = () => {
 
   return (
     <div className="poker-game">
-      <div className="game-header">
-        <Link to={getBackPath()} onClick={handleBackClick} className="back-link">
-          <ArrowLeft size={20} />
-          {gameMode === 'ai' ? 'Back to Setup' : 'Back to Lobby'}
-        </Link>
-        <div className="game-info">
-          <div className="game-mode">
-            {gameMode === 'ai' ? <Bot size={20} /> : <Users size={20} />}
-            {gameMode === 'ai' ? 'AI Game' : 'Multiplayer Game'}
+      <div className="game-hud-header">
+        <div className="hud-left">
+          <Link to={getBackPath()} onClick={handleBackClick} className="hud-btn" title={gameMode === 'ai' ? 'Back to Setup' : 'Back to Lobby'}>
+            <ArrowLeft size={20} />
+            <span className="btn-text">Back</span>
+          </Link>
+        </div>
+
+        <div className="hud-center">
+          <div className="logo-text">AI POKER <span className="highlight">AGENT</span></div>
+        </div>
+
+        <div className="hud-right">
+          <div className="hud-stat">
+            {gameMode === 'ai' ? <Bot size={18} /> : <Users size={18} />}
+            <span>{gameMode === 'ai' ? 'AI Game' : 'Multiplayer'}</span>
           </div>
-          <div className="pot-info">
-            <DollarSign size={20} />
-            Pot: ${gameState.pot || 0}
+          <div className="hud-stat pot-stat">
+            <DollarSign size={18} />
+            <span>Pot: ${gameState.pot || 0}</span>
           </div>
         </div>
       </div>
@@ -485,67 +497,58 @@ const PokerGame = () => {
         </div>
 
         <div className={`players-container players-${(gameState.players || []).length}`}>
-          {gameMode === 'ai' 
+          {gameMode === 'ai'
             ? getPlayerPositions(gameState.players as AIPlayer[] || []).map((player) => renderPlayer(player, player.position as 'bottom' | 'left' | 'top' | 'right'))
             : (gameState.players || []).map((player: any) => (
-                <motion.div
-                  key={player.id}
-                  className={`player player-${player.position} ${player.folded ? 'folded' : ''}`}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <div className="player-info">
-                    <div className="player-name">{player.username}</div>
-                    <div className="player-chips">
-                      <DollarSign size={16} />
-                      {player.chips}
-                    </div>
-                    {player.bet > 0 && (
-                      <div className="player-bet">Bet: ${player.bet}</div>
-                    )}
+              <motion.div
+                key={player.id}
+                className={`player player-${player.position} ${player.folded ? 'folded' : ''}`}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5 }}
+              >
+                <div className="player-info">
+                  <div className="player-name">{player.username}</div>
+                  <div className="player-chips">
+                    <DollarSign size={16} />
+                    {player.chips}
                   </div>
-                  <div className="player-cards">
-                    {player.cards && player.cards.length > 0 ? (
-                      player.cards.map((card: any, index: number) => {
-                        // Show AI cards when game is finished, otherwise hide them
-                        // Check multiple ways to identify AI players
-                        const isAI = player.isAI || player.aiId || player.username.startsWith('Bot_') || player.username.includes('AI');
-                        const isHumanPlayer = player.id === user?.id || player.userId === user?.id || player.username === user?.username;
-                        
-                        // Force show all cards when game is finished
-                        const shouldHide = Boolean(gameState?.gameState === 'finished' ? false : (isAI && !isHumanPlayer));
-                        
-                        return (
-                          <div key={index}>
-                            {renderCard(card, shouldHide)}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      // Show placeholder cards if no cards are available
-                      <>
-                        <div>{renderCard(null, player.id !== user?.id && player.userId !== user?.id)}</div>
-                        <div>{renderCard(null, player.id !== user?.id && player.userId !== user?.id)}</div>
-                      </>
-                    )}
-                  </div>
-                </motion.div>
-              ))
+                  {player.bet > 0 && (
+                    <div className="player-bet">Bet: ${player.bet}</div>
+                  )}
+                </div>
+                <div className="player-cards">
+                  {player.cards && player.cards.length > 0 ? (
+                    player.cards.map((card: any, index: number) => {
+                      // Show AI cards when game is finished, otherwise hide them
+                      // Check multiple ways to identify AI players
+                      const isAI = player.isAI || player.aiId || player.username.startsWith('Bot_') || player.username.includes('AI');
+                      const isHumanPlayer = player.id === user?.id || player.userId === user?.id || player.username === user?.username;
+
+                      // Force show all cards when game is finished or showdown
+                      const shouldHide = Boolean((gameState?.gameState === 'finished' || gameState?.gameState === 'showdown') ? false : (isAI && !isHumanPlayer));
+
+                      return (
+                        <div key={index}>
+                          {renderCard(card, shouldHide)}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    // Show placeholder cards if no cards are available
+                    <>
+                      <div>{renderCard(null, player.id !== user?.id && player.userId !== user?.id)}</div>
+                      <div>{renderCard(null, player.id !== user?.id && player.userId !== user?.id)}</div>
+                    </>
+                  )}
+                </div>
+              </motion.div>
+            ))
           }
         </div>
       </div>
 
-      {/* Debug info */}
-      <div style={{ position: 'fixed', top: '10px', right: '10px', background: 'rgba(0,0,0,0.8)', color: 'white', padding: '10px', fontSize: '12px', zIndex: 1000 }}>
-        <div>isCurrentPlayer: {isCurrentPlayer ? 'true' : 'false'}</div>
-        <div>currentPlayerState: {currentPlayerState ? 'exists' : 'null'}</div>
-        <div>folded: {currentPlayerState?.folded ? 'true' : 'false'}</div>
-        <div>gameState.currentTurn: {gameState?.currentTurn}</div>
-        <div>validCurrentTurn: {validCurrentTurn}</div>
-        <div>playerIndex: {playerIndex}</div>
-        <div>players.length: {gameState?.players.length}</div>
-      </div>
+
 
       {isCurrentPlayer && currentPlayerState && !currentPlayerState.folded && (
         <div className="game-controls">
@@ -557,7 +560,7 @@ const PokerGame = () => {
               Your chips: ${currentPlayerState.chips || 0}
             </div>
           </div>
-          
+
           <div className="action-buttons">
             <motion.button
               className="btn btn-danger"
@@ -568,7 +571,7 @@ const PokerGame = () => {
             >
               {isLoading ? 'Processing...' : 'Fold'}
             </motion.button>
-            
+
             {/* Check button - only show if no bet to call */}
             {(gameState.currentBet || 0) === (currentPlayerState.currentBet || 0) && (
               <motion.button
@@ -581,7 +584,7 @@ const PokerGame = () => {
                 Check
               </motion.button>
             )}
-            
+
             {/* Call button - show if there's a bet to call */}
             {(gameState.currentBet || 0) > (currentPlayerState.currentBet || 0) && (
               <motion.button
@@ -594,7 +597,7 @@ const PokerGame = () => {
                 Call ${(gameState.currentBet || 0) - (currentPlayerState.currentBet || 0)}
               </motion.button>
             )}
-            
+
             {/* Raise buttons - show different raise amounts */}
             {(currentPlayerState.chips || 0) > (gameState.currentBet || 0) && (
               <>
@@ -607,7 +610,7 @@ const PokerGame = () => {
                 >
                   Raise ${gameState.bigBlind || 50}
                 </motion.button>
-                
+
                 <motion.button
                   className="btn btn-success"
                   onClick={() => handlePlayerAction('raise', (gameState.currentBet || 0) * 2)}
@@ -619,7 +622,7 @@ const PokerGame = () => {
                 </motion.button>
               </>
             )}
-            
+
             {/* All-in button */}
             {(currentPlayerState.chips || 0) > 0 && (
               <motion.button
@@ -639,9 +642,10 @@ const PokerGame = () => {
       {playerAction && (
         <motion.div
           className="action-feedback"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
+          initial={{ opacity: 0, y: -20, x: '-50%' }}
+          animate={{ opacity: 1, y: 0, x: '-50%' }}
+          exit={{ opacity: 0, y: -20, x: '-50%' }}
+
         >
           You {playerAction}ed!
         </motion.div>
@@ -650,9 +654,10 @@ const PokerGame = () => {
       {gameError && (
         <motion.div
           className="error-feedback"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
+          initial={{ opacity: 0, y: -20, x: '-50%' }}
+          animate={{ opacity: 1, y: 0, x: '-50%' }}
+          exit={{ opacity: 0, y: -20, x: '-50%' }}
+
         >
           Error: {gameError}
         </motion.div>
@@ -678,7 +683,7 @@ const PokerGame = () => {
 
       {/* Winner/Loser Display on Table */}
       {showWinnerNotification && gameState?.gameState === 'finished' && gameState?.winner && (
-        <motion.div 
+        <motion.div
           className={`${gameState.winner.playerId === user?.id || gameState.winner.playerId === user?.username ? 'winner' : 'loser'}-display`}
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}

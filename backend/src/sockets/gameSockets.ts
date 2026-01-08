@@ -33,9 +33,9 @@ export default (io: Server): void => {
   // Authentication middleware for socket connections
   io.use((socket: Socket, next) => {
     // Try to get token from auth or cookies
-    const token = socket.handshake.auth.token || 
-                 socket.handshake.headers.cookie?.match(/authToken=([^;]+)/)?.[1];
-    
+    const token = socket.handshake.auth.token ||
+      socket.handshake.headers.cookie?.match(/authToken=([^;]+)/)?.[1];
+
     if (token) {
       try {
         const decoded = verifyToken(token);
@@ -57,19 +57,19 @@ export default (io: Server): void => {
     authenticatedSocket.on('createGame', async (data: CreateGameData) => {
       try {
         const { gameType, aiDifficulty } = data;
-        
+
         // Validate difficulty level
         const validDifficulties = ['easy', 'medium', 'hard', 'expert'];
         if (!validDifficulties.includes(aiDifficulty)) {
           throw new Error(`Invalid difficulty level: ${aiDifficulty}. Must be one of: ${validDifficulties.join(', ')}`);
         }
-        
+
         console.log(`\n🎮 CREATING AI GAME - Difficulty: ${aiDifficulty.toUpperCase()}, Type: ${gameType}`);
-        
+
         const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
+
         const gameEngine = new GameEngine(gameId);
-        
+
         // Fix: Convert string userId to ObjectId and provide proper types
         const players = [
           {
@@ -88,39 +88,39 @@ export default (io: Server): void => {
 
         const game = await gameEngine.initializeGame(players, gameType);
         activeGames.set(gameId, gameEngine);
-        
+
         // Create AI instance for this game with validated difficulty
         const ai = new PokerAI(aiDifficulty);
         aiInstances.set(gameId, ai);
-        
+
         console.log(`✅ AI Game Created - Game ID: ${gameId}, AI Difficulty: ${aiDifficulty.toUpperCase()}`);
-        
+
         authenticatedSocket.join(gameId);
         authenticatedSocket.gameId = gameId;
-        
+
         // Send initial game state (hide AI cards)
         const gameState = {
           ...game.toObject(),
           players: game.players.map(player => ({
             ...player,
-            cards: player.isAI ? [] : player.cards // Hide AI cards from client
+            cards: (player.isAI && game.gameState !== 'finished') ? [] : player.cards // Hide AI cards until game is finished
           }))
         };
-        
-        authenticatedSocket.emit('gameCreated', { 
+
+        authenticatedSocket.emit('gameCreated', {
           success: true,
-          gameId, 
-          gameState 
+          gameId,
+          gameState
         });
-        
+
         // If it's AI's turn, make AI move
         if (game.players[game.currentPlayer].isAI) {
           setTimeout(() => handleAIMove(gameId), 2000);
         }
-        
+
       } catch (error) {
         console.error('Create game error:', error);
-        authenticatedSocket.emit('error', { 
+        authenticatedSocket.emit('error', {
           success: false,
           message: (error as Error).message || 'Failed to create game',
           code: 'GAME_CREATION_ERROR'
@@ -133,9 +133,9 @@ export default (io: Server): void => {
       try {
         const { gameId, action, amount = 0 } = data;
         const gameEngine = activeGames.get(gameId);
-        
+
         if (!gameEngine) {
-          authenticatedSocket.emit('error', { 
+          authenticatedSocket.emit('error', {
             success: false,
             message: 'Game not found',
             code: 'GAME_NOT_FOUND'
@@ -144,9 +144,9 @@ export default (io: Server): void => {
         }
 
         const updatedGame = await gameEngine.makeAction(
-          gameId, 
-          authenticatedSocket.user.userId, 
-          action, 
+          gameId,
+          authenticatedSocket.user.userId,
+          action,
           amount
         );
 
@@ -155,11 +155,11 @@ export default (io: Server): void => {
           ...updatedGame.toObject(),
           players: updatedGame.players.map(player => ({
             ...player,
-            cards: player.isAI ? [] : player.cards
+            cards: (player.isAI && updatedGame.gameState !== 'finished') ? [] : player.cards
           }))
         };
-        
-        io.to(gameId).emit('gameUpdate', { 
+
+        io.to(gameId).emit('gameUpdate', {
           success: true,
           gameState,
           lastAction: {
@@ -176,14 +176,14 @@ export default (io: Server): void => {
         }
 
         // If it's AI's turn next, make AI move
-        if (updatedGame.players[updatedGame.currentPlayer].isAI && 
-            updatedGame.gameState !== 'finished') {
+        if (updatedGame.players[updatedGame.currentPlayer].isAI &&
+          updatedGame.gameState !== 'finished') {
           setTimeout(() => handleAIMove(gameId), 1500);
         }
 
       } catch (error) {
         console.error('Make move error:', error);
-        authenticatedSocket.emit('error', { 
+        authenticatedSocket.emit('error', {
           success: false,
           message: (error as Error).message || 'Failed to make move',
           code: 'MOVE_ERROR'
@@ -196,9 +196,9 @@ export default (io: Server): void => {
       try {
         const { gameId, iterations = 1000 } = data;
         const ai = aiInstances.get(gameId);
-        
+
         if (!ai) {
-          authenticatedSocket.emit('error', { 
+          authenticatedSocket.emit('error', {
             success: false,
             message: 'AI instance not found',
             code: 'AI_NOT_FOUND'
@@ -206,15 +206,15 @@ export default (io: Server): void => {
           return;
         }
 
-        authenticatedSocket.emit('trainingStarted', { 
+        authenticatedSocket.emit('trainingStarted', {
           success: true,
           message: 'AI training in progress...',
           iterations
         });
-        
+
         // Generate sample game states for training
         const sampleGameStates = generateTrainingData();
-        
+
         // Run training in background
         setTimeout(async () => {
           try {
@@ -235,7 +235,7 @@ export default (io: Server): void => {
 
       } catch (error) {
         console.error('Train AI error:', error);
-        authenticatedSocket.emit('error', { 
+        authenticatedSocket.emit('error', {
           success: false,
           message: (error as Error).message || 'Failed to start training',
           code: 'TRAINING_START_ERROR'
@@ -248,14 +248,14 @@ export default (io: Server): void => {
       try {
         const { gameId } = data;
         const ai = aiInstances.get(gameId);
-        
+
         if (ai) {
           authenticatedSocket.emit('aiStats', {
             success: true,
             stats: ai.getAIStats()
           });
         } else {
-          authenticatedSocket.emit('error', { 
+          authenticatedSocket.emit('error', {
             success: false,
             message: 'AI instance not found',
             code: 'AI_NOT_FOUND'
@@ -276,7 +276,7 @@ export default (io: Server): void => {
       try {
         const { gameId } = data;
         const gameEngine = activeGames.get(gameId);
-        
+
         if (!gameEngine) {
           authenticatedSocket.emit('error', {
             success: false,
@@ -300,7 +300,7 @@ export default (io: Server): void => {
           ...game.toObject(),
           players: game.players.map(player => ({
             ...player,
-            cards: player.isAI ? [] : player.cards
+            cards: (player.isAI && game.gameState !== 'finished') ? [] : player.cards
           }))
         };
 
@@ -322,7 +322,7 @@ export default (io: Server): void => {
     // Handle disconnection
     authenticatedSocket.on('disconnect', () => {
       console.log(`User disconnected: ${authenticatedSocket.user.userId}`);
-      
+
       if (authenticatedSocket.gameId) {
         // Clean up game resources
         const gameEngine = activeGames.get(authenticatedSocket.gameId);
@@ -344,7 +344,7 @@ export default (io: Server): void => {
     try {
       const gameEngine = activeGames.get(gameId);
       const ai = aiInstances.get(gameId);
-      
+
       if (!gameEngine || !ai) {
         console.log(`❌ AI Move Failed: Game engine or AI instance not found for game ${gameId}`);
         return;
@@ -367,10 +367,10 @@ export default (io: Server): void => {
 
       // Get AI decision
       const decision = await ai.makeDecision(currentGame, currentPlayer.username);
-      
+
       console.log(`🎯 AI DECISION MADE: ${decision.action}${decision.amount ? ` $${decision.amount}` : ''}`);
       console.log(`💭 AI Reasoning: ${decision.reasoning}`);
-      
+
       // Execute AI move
       const updatedGame = await gameEngine.makeAction(
         gameId,
@@ -386,10 +386,10 @@ export default (io: Server): void => {
         ...updatedGame.toObject(),
         players: updatedGame.players.map(player => ({
           ...player,
-          cards: player.isAI ? [] : player.cards
+          cards: (player.isAI && updatedGame.gameState !== 'finished') ? [] : player.cards
         }))
       };
-      
+
       io.to(gameId).emit('aiMove', {
         success: true,
         gameState,
@@ -409,14 +409,14 @@ export default (io: Server): void => {
       }
 
       // If still AI's turn, continue
-      if (updatedGame.players[updatedGame.currentPlayer].isAI && 
-          updatedGame.gameState !== 'finished') {
+      if (updatedGame.players[updatedGame.currentPlayer].isAI &&
+        updatedGame.gameState !== 'finished') {
         setTimeout(() => handleAIMove(gameId), 1500);
       }
 
     } catch (error) {
       console.error('AI move error:', error);
-      io.to(gameId).emit('error', { 
+      io.to(gameId).emit('error', {
         success: false,
         message: 'AI move failed',
         code: 'AI_MOVE_ERROR'

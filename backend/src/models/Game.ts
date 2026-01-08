@@ -57,6 +57,10 @@ const playerSchema = new Schema<Player>({
   aiId: {
     type: String,
     default: null
+  },
+  hasActed: {
+    type: Boolean,
+    default: false
   }
 });
 

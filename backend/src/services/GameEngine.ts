@@ -13,7 +13,7 @@ export class GameEngine {
   async initializeGame(players: Partial<Player>[], gameType: GameType = 'ai-vs-human'): Promise<IGame> {
     try {
       const deck = shuffleDeck(createDeck());
-      
+
       const game = new Game({
         gameId: this.gameId,
         gameType,
@@ -27,7 +27,7 @@ export class GameEngine {
             if (index === 0) position = 'dealer';
             else if (index === 1) position = 'bigBlind';
           }
-          
+
           return {
             userId: player.userId || null,
             username: player.username || `Player_${index + 1}`,
@@ -38,7 +38,8 @@ export class GameEngine {
             totalBet: 0,
             folded: false,
             allIn: false,
-            isAI: player.isAI || false
+            isAI: player.isAI || false,
+            hasActed: false
           } as Player;
         }),
         deck,
@@ -57,7 +58,7 @@ export class GameEngine {
 
       // Deal hole cards
       this.dealHoleCards(game);
-      
+
       // Post blinds
       this.postBlinds(game);
 
@@ -121,12 +122,12 @@ export class GameEngine {
       const game = await Game.findOne({ gameId });
       if (!game) throw new Error('Game not found');
 
-      const playerIndex = game.players.findIndex(p => 
+      const playerIndex = game.players.findIndex(p =>
         p.userId?.toString() === playerId || p.username === playerId
       );
-      
+
       console.log(`Action attempt: playerId=${playerId}, playerIndex=${playerIndex}, currentPlayer=${game.currentPlayer}, players=${game.players.map(p => p.username)}`);
-      
+
       if (playerIndex === -1) throw new Error('Player not found');
       if (playerIndex !== game.currentPlayer) throw new Error(`Not your turn. Current player: ${game.currentPlayer}, Your index: ${playerIndex}`);
       if (game.gameState === 'finished') throw new Error('Game is finished');
@@ -143,7 +144,7 @@ export class GameEngine {
         case 'fold':
           player.folded = true;
           break;
-          
+
         case 'call':
           if (callAmount === 0) throw new Error('Nothing to call');
           if (callAmount > player.chips) {
@@ -158,7 +159,7 @@ export class GameEngine {
           player.totalBet += actionAmount;
           game.pot += actionAmount;
           break;
-          
+
         case 'raise':
           if (amount < game.bigBlind) throw new Error(`Minimum raise is ${game.bigBlind}`);
           const totalRaiseAmount = callAmount + amount;
@@ -177,7 +178,7 @@ export class GameEngine {
           game.pot += actionAmount;
           game.currentBet = newCurrentBet;
           break;
-          
+
         case 'check':
           if (callAmount > 0) {
             throw new Error('Cannot check, must call or fold');
@@ -195,7 +196,7 @@ export class GameEngine {
             game.currentBet = player.currentBet;
           }
           break;
-          
+
         default:
           throw new Error('Invalid action');
       }
@@ -207,6 +208,9 @@ export class GameEngine {
         amount: actionAmount,
         timestamp: new Date()
       };
+
+      // Mark player as acted
+      player.hasActed = true;
 
       // Move to next player or next betting round
       this.advanceGame(game);
@@ -253,18 +257,24 @@ export class GameEngine {
   private isBettingRoundComplete(game: IGame): boolean {
     const activePlayers = game.players.filter(p => !p.folded);
     if (activePlayers.length <= 1) return true;
-    
+
+    // Check if everyone has acted at least once (preflop, BB doesn't need to act if no one raises? No, usually they get option)
+    // Actually, big blind is "last to act" preflop.
+    // Simplifying: Everyone must have acted unless they are all-in.
+    const allHaveActed = activePlayers.every(p => p.hasActed || p.allIn);
+    if (!allHaveActed) return false;
+
     const maxBet = Math.max(...activePlayers.map(p => p.currentBet));
-    
+
     // Check if all active players have either matched the bet or are all-in
-    return activePlayers.every(p => 
+    return activePlayers.every(p =>
       p.currentBet === maxBet || p.allIn || p.chips === 0
     );
   }
 
   private endHand(game: IGame): void {
     const activePlayers = game.players.filter(p => !p.folded);
-    
+
     if (activePlayers.length === 1) {
       // Only one player left, they win
       const winner = activePlayers[0];
@@ -278,16 +288,19 @@ export class GameEngine {
       // Showdown - evaluate hands
       this.showdown(game);
     }
-    
+
     game.gameState = 'finished';
     game.endTime = new Date();
   }
 
   private nextBettingRound(game: IGame): void {
-    // Reset current bets for next round
-    game.players.forEach(p => p.currentBet = 0);
+    // Reset current bets and hasActed for next round
+    game.players.forEach(p => {
+      p.currentBet = 0;
+      p.hasActed = false;
+    });
     game.currentBet = 0;
-    
+
     // Advance game state
     switch (game.gameState) {
       case 'preflop':
@@ -364,7 +377,7 @@ export class GameEngine {
 
   private showdown(game: IGame): void {
     const activePlayers = game.players.filter(p => !p.folded);
-    
+
     if (activePlayers.length === 1) {
       // Only one player left, they win
       const winner = activePlayers[0];
@@ -383,7 +396,7 @@ export class GameEngine {
 
       handEvaluations.sort((a, b) => compareHands(b.hand, a.hand));
       const winner = handEvaluations[0];
-      
+
       winner.player.chips += game.pot;
       game.winner = {
         playerId: winner.player.userId?.toString() || winner.player.username,
@@ -433,6 +446,7 @@ export class GameEngine {
         player.allIn = false;
         // Reset positions
         player.position = 'none';
+        player.hasActed = false;
       });
 
       // Set new positions
@@ -481,13 +495,13 @@ export class GameEngine {
 
     const actions: ActionType[] = ['fold'];
     const callAmount = this.getCallAmount(game, game.currentPlayer);
-    
+
     if (callAmount > 0) {
       actions.push('call');
     } else {
       actions.push('check');
     }
-    
+
     const currentPlayer = game.players[game.currentPlayer];
     if (currentPlayer.chips > callAmount) {
       actions.push('raise');

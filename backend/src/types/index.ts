@@ -24,6 +24,7 @@ export interface Player {
   allIn: boolean;
   isAI: boolean;
   aiId?: string; // AI identifier for multiple AI instances
+  hasActed?: boolean;
 }
 
 export interface GameAction {
@@ -50,7 +51,7 @@ export interface IUser extends Document {
   level: number;
   experience: number;
   createdAt?: Date;
-  updatedAt?: Date; 
+  updatedAt?: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 

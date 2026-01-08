@@ -22,6 +22,7 @@ interface AIGameContextType {
   setCurrentAIGame: (game: AIGameState | null) => void;
   createAIGame: (config: { minAIPlayers: number; difficulty: string }) => Promise<boolean>;
   makeAIAction: (action: any) => Promise<boolean>;
+  processAITurn: () => Promise<boolean>;
   leaveAIGame: () => void;
   isLoading: boolean;
   error: string | null;
@@ -49,7 +50,7 @@ export const AIGameProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         const gameState: AIGameState = {
           gameId: data.data.gameId,
@@ -99,7 +100,7 @@ export const AIGameProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         const gameStateData = data.data.gameState;
         const updatedGameState: AIGameState = {
@@ -130,6 +131,41 @@ export const AIGameProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  const processAITurn = async (): Promise<boolean> => {
+    if (!currentAIGame) return false;
+    // Don't set global loading state to avoid UI flicker, just background process
+    try {
+      const response = await fetch('/api/ai-game/process-turn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ gameId: currentAIGame.gameId })
+      });
+      const data = await response.json();
+      if (data.success) {
+        const gameStateData = data.data.gameState;
+        const updatedGameState: AIGameState = {
+          gameId: gameStateData.gameId,
+          players: gameStateData.players || [],
+          gameState: gameStateData.gameState || 'playing',
+          pot: gameStateData.pot || 0,
+          communityCards: gameStateData.communityCards || [],
+          currentTurn: gameStateData.currentPlayer || gameStateData.currentTurn || 0,
+          currentBet: gameStateData.currentBet || 0,
+          smallBlind: gameStateData.smallBlind || 25,
+          bigBlind: gameStateData.bigBlind || 50,
+          winner: gameStateData.winner
+        };
+        setCurrentAIGame(updatedGameState);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('Process AI Turn error', e);
+      return false;
+    }
+  };
+
   const leaveAIGame = () => {
     setCurrentAIGame(null);
     setError(null);
@@ -142,6 +178,7 @@ export const AIGameProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setCurrentAIGame,
         createAIGame,
         makeAIAction,
+        processAITurn,
         leaveAIGame,
         isLoading,
         error
