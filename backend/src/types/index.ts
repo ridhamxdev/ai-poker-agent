@@ -24,6 +24,7 @@ export interface Player {
   allIn: boolean;
   isAI: boolean;
   aiId?: string; // AI identifier for multiple AI instances
+  hasActed: boolean;
 }
 
 export interface GameAction {

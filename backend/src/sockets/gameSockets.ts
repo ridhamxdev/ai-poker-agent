@@ -2,8 +2,9 @@ import { Server, Socket } from 'socket.io';
 import { Types } from 'mongoose';
 import GameEngine from '../services/GameEngine';
 import PokerAI from '../services/pokerAI';
+import Game from '../models/Game';
 import { verifyToken } from '../middleware/auth';
-import { AuthenticatedUser, GameType, Difficulty, ActionType, GameState } from '../types';
+import { AuthenticatedUser, GameType, Difficulty, ActionType, GameState, Card } from '../types';
 
 interface AuthenticatedSocket extends Socket {
   user: AuthenticatedUser;
@@ -48,6 +49,46 @@ export default (io: Server): void => {
       next(new Error('No token provided'));
     }
   });
+
+  // Helper to get or create game instance (lazy loading)
+  async function getOrCreateGameInstance(gameId: string): Promise<{ gameEngine: GameEngine, ai: PokerAI | undefined } | null> {
+    // Check if already in memory
+    let gameEngine = activeGames.get(gameId);
+    let ai = aiInstances.get(gameId);
+
+    if (gameEngine && ai) {
+      return { gameEngine, ai };
+    }
+
+    // Try to load from DB
+    try {
+      const gameFromDb = await Game.findOne({ gameId });
+
+      if (!gameFromDb) {
+        return null;
+      }
+
+      // Reconstruct GameEngine if missing
+      if (!gameEngine) {
+        console.log(`♻️  Restoring GameEngine for ${gameId} from DB`);
+        gameEngine = new GameEngine(gameId);
+        activeGames.set(gameId, gameEngine);
+      }
+
+      // Reconstruct AI if missing
+      if (!ai) {
+        const difficulty = gameFromDb.aiDifficulty || 'medium';
+        console.log(`♻️  Restoring PokerAI (${difficulty}) for ${gameId} from DB`);
+        ai = new PokerAI(difficulty);
+        aiInstances.set(gameId, ai);
+      }
+
+      return { gameEngine, ai };
+    } catch (error) {
+      console.error(`Error restoring game ${gameId}:`, error);
+      return null;
+    }
+  }
 
   io.on('connection', (socket: Socket) => {
     const authenticatedSocket = socket as AuthenticatedSocket;
@@ -132,9 +173,9 @@ export default (io: Server): void => {
     authenticatedSocket.on('makeMove', async (data: MakeMoveData) => {
       try {
         const { gameId, action, amount = 0 } = data;
-        const gameEngine = activeGames.get(gameId);
+        const instances = await getOrCreateGameInstance(gameId);
 
-        if (!gameEngine) {
+        if (!instances) {
           authenticatedSocket.emit('error', {
             success: false,
             message: 'Game not found',
@@ -142,6 +183,8 @@ export default (io: Server): void => {
           });
           return;
         }
+
+        const { gameEngine, ai } = instances;
 
         const updatedGame = await gameEngine.makeAction(
           gameId,
@@ -170,7 +213,6 @@ export default (io: Server): void => {
         });
 
         // Observe opponent action for AI learning
-        const ai = aiInstances.get(gameId);
         if (ai && !updatedGame.players[updatedGame.currentPlayer].isAI) {
           ai.observeOpponentAction(updatedGame.gameState, action, amount, updatedGame.pot);
         }
@@ -195,9 +237,9 @@ export default (io: Server): void => {
     authenticatedSocket.on('trainAI', async (data: TrainAIData) => {
       try {
         const { gameId, iterations = 1000 } = data;
-        const ai = aiInstances.get(gameId);
+        const instances = await getOrCreateGameInstance(gameId);
 
-        if (!ai) {
+        if (!instances || !instances.ai) {
           authenticatedSocket.emit('error', {
             success: false,
             message: 'AI instance not found',
@@ -205,6 +247,8 @@ export default (io: Server): void => {
           });
           return;
         }
+
+        const { ai } = instances;
 
         authenticatedSocket.emit('trainingStarted', {
           success: true,
@@ -244,15 +288,15 @@ export default (io: Server): void => {
     });
 
     // Get AI statistics
-    authenticatedSocket.on('getAIStats', (data: { gameId: string }) => {
+    authenticatedSocket.on('getAIStats', async (data: { gameId: string }) => {
       try {
         const { gameId } = data;
-        const ai = aiInstances.get(gameId);
+        const instances = await getOrCreateGameInstance(gameId);
 
-        if (ai) {
+        if (instances && instances.ai) {
           authenticatedSocket.emit('aiStats', {
             success: true,
-            stats: ai.getAIStats()
+            stats: instances.ai.getAIStats()
           });
         } else {
           authenticatedSocket.emit('error', {
@@ -275,9 +319,9 @@ export default (io: Server): void => {
     authenticatedSocket.on('getGameState', async (data: { gameId: string }) => {
       try {
         const { gameId } = data;
-        const gameEngine = activeGames.get(gameId);
+        const instances = await getOrCreateGameInstance(gameId);
 
-        if (!gameEngine) {
+        if (!instances) {
           authenticatedSocket.emit('error', {
             success: false,
             message: 'Game not found',
@@ -285,6 +329,8 @@ export default (io: Server): void => {
           });
           return;
         }
+
+        const { gameEngine } = instances;
 
         const game = await gameEngine.getGameState(gameId);
         if (!game) {
@@ -324,17 +370,14 @@ export default (io: Server): void => {
       console.log(`User disconnected: ${authenticatedSocket.user.userId}`);
 
       if (authenticatedSocket.gameId) {
-        // Clean up game resources
-        const gameEngine = activeGames.get(authenticatedSocket.gameId);
-        if (gameEngine) {
-          // Handle player disconnection (pause game, etc.)
-          io.to(authenticatedSocket.gameId).emit('playerDisconnected', {
-            success: false,
-            userId: authenticatedSocket.user.userId,
-            username: authenticatedSocket.user.username,
-            message: 'Player disconnected'
-          });
-        }
+        // We don't need to clean up game resources immediately if we have DB persistence
+        // But we could notify others
+        io.to(authenticatedSocket.gameId).emit('playerDisconnected', {
+          success: false,
+          userId: authenticatedSocket.user.userId,
+          username: authenticatedSocket.user.username,
+          message: 'Player disconnected'
+        });
       }
     });
   });
@@ -342,13 +385,14 @@ export default (io: Server): void => {
   // AI move handler
   async function handleAIMove(gameId: string): Promise<void> {
     try {
-      const gameEngine = activeGames.get(gameId);
-      const ai = aiInstances.get(gameId);
+      const instances = await getOrCreateGameInstance(gameId);
 
-      if (!gameEngine || !ai) {
+      if (!instances || !instances.ai) {
         console.log(`❌ AI Move Failed: Game engine or AI instance not found for game ${gameId}`);
         return;
       }
+
+      const { gameEngine, ai } = instances;
 
       const currentGame = await gameEngine.getGameState(gameId);
       if (!currentGame || currentGame.gameState === 'finished') {
@@ -434,32 +478,34 @@ export default (io: Server): void => {
             userId: null,
             username: 'Player1',
             chips: 5000,
-            cards: [{ suit: 'hearts', rank: 'A' }, { suit: 'spades', rank: 'K' }],
+            cards: [{ suit: 'hearts', rank: 'A' }, { suit: 'spades', rank: 'K' }] as Card[],
             position: 'dealer',
             currentBet: 0,
             totalBet: 0,
             folded: false,
             allIn: false,
-            isAI: false
+            isAI: false,
+            hasActed: false
           },
           {
             userId: null,
             username: 'AI_Player',
             chips: 5000,
-            cards: [{ suit: 'clubs', rank: '7' }, { suit: 'diamonds', rank: '2' }],
+            cards: [{ suit: 'clubs', rank: '7' }, { suit: 'diamonds', rank: '2' }] as Card[],
             position: 'smallBlind',
             currentBet: 0,
             totalBet: 0,
             folded: false,
             allIn: false,
-            isAI: true
+            isAI: true,
+            hasActed: false
           }
         ],
         communityCards: [
           { suit: 'hearts', rank: 'A' },
           { suit: 'clubs', rank: 'K' },
           { suit: 'spades', rank: 'Q' }
-        ],
+        ] as Card[],
         pot: 300,
         currentBet: 100,
         bettingHistory: [50, 100],
@@ -473,25 +519,27 @@ export default (io: Server): void => {
             userId: null,
             username: 'Player1',
             chips: 4800,
-            cards: [{ suit: 'hearts', rank: '2' }, { suit: 'spades', rank: '7' }],
+            cards: [{ suit: 'hearts', rank: '2' }, { suit: 'spades', rank: '7' }] as Card[],
             position: 'dealer',
             currentBet: 100,
             totalBet: 300,
             folded: false,
             allIn: false,
-            isAI: false
+            isAI: false,
+            hasActed: true
           },
           {
             userId: null,
             username: 'AI_Player',
             chips: 4700,
-            cards: [{ suit: 'clubs', rank: 'A' }, { suit: 'diamonds', rank: 'A' }],
+            cards: [{ suit: 'clubs', rank: 'A' }, { suit: 'diamonds', rank: 'A' }] as Card[],
             position: 'smallBlind',
             currentBet: 100,
             totalBet: 300,
             folded: false,
             allIn: false,
-            isAI: true
+            isAI: true,
+            hasActed: false
           }
         ],
         communityCards: [
@@ -499,7 +547,7 @@ export default (io: Server): void => {
           { suit: 'clubs', rank: '10' },
           { suit: 'spades', rank: 'J' },
           { suit: 'diamonds', rank: 'Q' }
-        ],
+        ] as Card[],
         pot: 600,
         currentBet: 100,
         bettingHistory: [300, 300],

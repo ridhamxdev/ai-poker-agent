@@ -1402,6 +1402,30 @@ body {
   align-items: flex-end;
 }
 
+.player-top-left {
+  top: -40px;
+  left: 10%;
+  align-items: flex-start;
+}
+
+.player-top-right {
+  top: -40px;
+  right: 10%;
+  align-items: flex-end;
+}
+
+.player-bottom-left {
+  bottom: -40px;
+  left: 10%;
+  align-items: flex-start;
+}
+
+.player-bottom-right {
+  bottom: -40px;
+  right: 10%;
+  align-items: flex-end;
+}
+
 /* Game Info Panel Refinement */
 .game-info-panel {
   display: flex;

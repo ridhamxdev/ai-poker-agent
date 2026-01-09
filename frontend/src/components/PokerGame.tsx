@@ -24,7 +24,7 @@ interface AIPlayer {
   allIn: boolean;
   isAI: boolean;
   aiId?: string;
-  position?: 'bottom' | 'left' | 'top' | 'right' | 'dealer' | 'smallBlind' | 'bigBlind' | 'none';
+  position?: string;
   socketId?: string;
 }
 
@@ -133,29 +133,43 @@ const PokerGame = () => {
     }
   };
 
+
+
   const getPlayerPositions = (players: AIPlayer[]): AIPlayer[] => {
-    // Find current player's index
-    const currentPlayerIndex = players.findIndex(p => p.id === user?.id);
-    if (currentPlayerIndex === -1) return players;
+    // Robustly find current player index
+    const currentPlayerIndex = players.findIndex(p =>
+      p.id === user?.id ||
+      p.userId === user?.id ||
+      p.username === user?.username
+    );
 
-    // Assign positions relative to the current player
+    // If not found, return original list (or defaulting to index 0 view if preferred)
+    // defaulting to index 0 view is safer than breaking layout
+    const heroIndex = currentPlayerIndex === -1 ? 0 : currentPlayerIndex;
+
+    const playerCount = players.length;
+
+    // Define position maps based on player count
+    // Indices are relative to Hero at 0
+    const getPositionMap = (count: number) => {
+      if (count <= 2) return ['bottom', 'top'];
+      if (count === 3) return ['bottom', 'top-right', 'top-left']; // Triangle
+      if (count === 4) return ['bottom', 'right', 'top', 'left']; // Square
+      if (count === 5) return ['bottom', 'right', 'top-right', 'top-left', 'left']; // Pentagon-ish
+      if (count >= 6) return ['bottom', 'right', 'top-right', 'top', 'top-left', 'left']; // Hexagon
+      return [];
+    };
+
+    const positionMap = getPositionMap(playerCount);
+
+    // Assign positions
     return players.map((player, index) => {
-      const relativePosition = (index - currentPlayerIndex + players.length) % players.length;
-      let position: 'bottom' | 'left' | 'top' | 'right';
+      // Calculate relative index: (index - heroIndex + count) % count
+      // This rotates the table so Hero is always at 0 (bottom)
+      const relativeIndex = (index - heroIndex + playerCount) % playerCount;
 
-      switch (relativePosition) {
-        case 0:
-          position = 'bottom';
-          break;
-        case 1:
-          position = 'right';
-          break;
-        case 2:
-          position = 'top';
-          break;
-        default:
-          position = 'left';
-      }
+      // Fallback for > 6 players (just wrap around or stack left)
+      const position = positionMap[relativeIndex] || 'left';
 
       return {
         ...player,
@@ -264,7 +278,7 @@ const PokerGame = () => {
     );
   };
 
-  const renderPlayer = (player: AIPlayer, uiPosition: 'bottom' | 'left' | 'top' | 'right') => {
+  const renderPlayer = (player: AIPlayer, uiPosition: string) => {
     const isCurrentPlayer = gameState?.currentTurn === gameState?.players.findIndex(p => p.id === player.id || p.username === player.username || p.userId === player.userId);
     const isDealer = player.position === 'dealer';
     const isSmallBlind = player.position === 'smallBlind';
@@ -498,7 +512,7 @@ const PokerGame = () => {
 
         <div className={`players-container players-${(gameState.players || []).length}`}>
           {gameMode === 'ai'
-            ? getPlayerPositions(gameState.players as AIPlayer[] || []).map((player) => renderPlayer(player, player.position as 'bottom' | 'left' | 'top' | 'right'))
+            ? getPlayerPositions(gameState.players as AIPlayer[] || []).map((player) => renderPlayer(player, player.position as string))
             : (gameState.players || []).map((player: any) => (
               <motion.div
                 key={player.id}
